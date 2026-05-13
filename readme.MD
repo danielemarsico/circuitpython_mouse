@@ -97,7 +97,7 @@ The `CIPHER` command lets the web app send sensitive text (e.g. passwords) over 
 
 A Progressive Web App (PWA) is included in `app/` to control the device from Android (or any browser with Web Bluetooth support, such as Chrome on Android or desktop Chrome/Edge).
 
-Hosted on GitHub Pages: [paluigi.github.io/circuitpython_mouse](https://paluigi.github.io/circuitpython_mouse/)
+Hosted on GitHub Pages: [danielemarsico.github.io/circuitpython_mouse](https://danielemarsico.github.io/circuitpython_mouse/)
 
 ### Features
 
