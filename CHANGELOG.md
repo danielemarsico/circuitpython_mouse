@@ -11,6 +11,7 @@ Format: `[YYYY-MM-DD] - Description`
 - `TASKS.md` with phased implementation checklist for trackpad/jiggle features
 - `README.md` tab layout section documenting Mouse, Cipher, Trackpad, and Settings tabs
 - `CLAUDE.md` rule requiring `CHANGELOG.md` update before every commit/push
+- `[2026-06-16]` - Test suite: 38 Playwright browser tests with BLE mock, V8 coverage reporting (84.88% statement coverage), and README documentation in `test/webapp_tests/`
 
 ### Changed
 - `[2026-06-16]` - Device firmware: added `PRESS`, `RELEASE`, `JIGGLE`, and `JIGGLEPATH` commands to `handle_command()` in `device/code.py`

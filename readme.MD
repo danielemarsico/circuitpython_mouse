@@ -283,6 +283,72 @@ Enjoy!
 
 ---
 
+## Test Suite
+
+Automated browser tests for the web app using [Playwright](https://playwright.dev/) and a mock BLE device — no physical hardware required.
+
+### Structure
+
+```
+test/
+├── webapp_tests/            # Browser tests for app/
+│   ├── package.json
+│   ├── playwright.config.js # Auto-starts app on :8080, headless Chromium
+│   ├── fixtures.js          # Custom Playwright fixture: collects V8 JS coverage
+│   ├── report-coverage.cjs  # Converts V8 coverage → Istanbul text report
+│   ├── mocks/
+│   │   └── bluetooth-mock.js  # Replaces navigator.bluetooth with NUS device
+│   └── tests/
+│       ├── connect.spec.js    #  5 tests: connect, disconnect, enable/disable, log
+│       ├── controls.spec.js   # 15 tests: START/STOP/TOGGLE, move, click, scroll, type
+│       ├── trackpad.spec.js   #  7 tests: draw mode, right click, tap, press/release
+│       ├── jiggle.spec.js     #  8 tests: sliders, localStorage, JIGGLE, canvas, SVG
+│       └── cipher.spec.js     #  5 tests: encrypt, eye toggle, layout, persistence
+└── device_test/             # Placeholder for future CircuitPython tests
+```
+
+### How it Works
+
+Instead of connecting to a real BLE device, the mock injects a fake Web Bluetooth API stack that simulates a Nordic UART Service device. Every command the app sends (`START`, `MOVE x y`, `CLICK RIGHT`, etc.) is captured in `window.__bluetoothMock.commands`, and tests assert that clicking UI buttons produces the correct BLE payloads.
+
+The app is served locally via Python's `http.server` on port 8080, which Playwright auto-starts and stops.
+
+### Running
+
+```bash
+cd test/webapp_tests
+
+# Install dependencies (first time only)
+npm install
+npx playwright install chromium
+
+# Run all 38 tests
+npm test
+
+# Run with browser visible
+npm run test:headed
+```
+
+### Coverage
+
+Coverage is collected via Chromium's V8 JS coverage API and converted to Istanbul format.
+
+```bash
+npm test                      # generates .coverage/*.json
+node report-coverage.cjs      # prints text report
+```
+
+```
+Statement coverage: 84.88% (466/549)
+Branch coverage:   100%   (108/108)
+Function coverage:  91.66% (11/12)
+Line coverage:      84.88% (466/549)
+```
+
+**Uncovered code** (83 lines): the Password Deriver (requires network fetch), Copy-to-clipboard (not available in headless), keyboard Enter key shortcuts, and trackpad `pointermove` with real movement deltas (synthetic events carry `movementX/Y = 0`). These are expected gaps for a headless test suite without network or clipboard infrastructure.
+
+---
+
 ## License
 
 MIT — see [LICENSE](LICENSE) for details.

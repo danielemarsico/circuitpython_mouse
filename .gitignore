@@ -1,2 +1,5 @@
 boot_info.txt
-
+test/webapp_tests/node_modules/
+test/webapp_tests/.coverage/
+test/webapp_tests/coverage-report/
+test/webapp_tests/test-results/
