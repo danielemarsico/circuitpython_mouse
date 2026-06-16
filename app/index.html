@@ -221,6 +221,7 @@
   <div class="tabs">
     <button class="tab-btn active" data-tab="controls">Controls</button>
     <button class="tab-btn"        data-tab="cipher">Cipher</button>
+    <button class="tab-btn"        data-tab="trackpad">Trackpad</button>
     <button class="tab-btn"        data-tab="settings" style="margin-left:auto;" aria-label="Settings" title="Settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1.1rem;height:1.1rem;display:block;"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg></button>
   </div>
 
@@ -330,6 +331,29 @@
 
   </div><!-- /panel-cipher -->
 
+  <!-- Trackpad panel -->
+  <div id="panel-trackpad" class="tab-panel hidden">
+
+    <div class="card">
+      <h2>Trackpad</h2>
+      <div style="display:flex;gap:0.5rem;margin-bottom:0.75rem;">
+        <button id="btn-draw-mode" class="btn-primary" style="flex:1;">Draw Mode OFF</button>
+        <button class="btn-blue" id="btn-right-click" data-cmd="CLICK RIGHT" disabled style="flex:1;">Right Click</button>
+      </div>
+      <div id="trackpad-area"
+           style="width:100%;aspect-ratio:4/3;background:#0d1117;border:1px solid #1e4480;
+                  border-radius:10px;cursor:crosshair;touch-action:none;user-select:none;">
+      </div>
+      <div style="margin-top:0.75rem;" class="input-row">
+        <label style="min-width:7rem;font-size:0.8rem;color:#aaa;">Sensitivity</label>
+        <input type="range" id="trackpad-sensitivity" min="1" max="10" value="3"
+               style="flex:1;accent-color:#3b82f6;" />
+        <span id="sensitivity-val" style="min-width:1.5rem;text-align:right;font-size:0.85rem;">3</span>
+      </div>
+    </div>
+
+  </div><!-- /panel-trackpad -->
+
   <!-- Settings panel -->
   <div id="panel-settings" class="tab-panel hidden">
 
@@ -357,6 +381,40 @@
         <option value="EN">English (US)</option>
         <option value="IT">Italian</option>
       </select>
+    </div>
+
+    <div class="card">
+      <h2>Jiggle Speed &amp; Range</h2>
+      <div class="input-row" style="margin-bottom:0.5rem;">
+        <label style="min-width:5rem;font-size:0.8rem;color:#aaa;">Speed (s)</label>
+        <input type="range" id="jiggle-speed" min="0.5" max="30" step="0.5" value="2"
+               style="flex:1;accent-color:#3b82f6;" />
+        <span id="jiggle-speed-val" style="min-width:2.5rem;text-align:right;font-size:0.85rem;">2s</span>
+      </div>
+      <div class="input-row">
+        <label style="min-width:5rem;font-size:0.8rem;color:#aaa;">Range (px)</label>
+        <input type="range" id="jiggle-range" min="1" max="50" step="1" value="2"
+               style="flex:1;accent-color:#3b82f6;" />
+        <span id="jiggle-range-val" style="min-width:2.5rem;text-align:right;font-size:0.85rem;">2px</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Jiggle Path</h2>
+      <canvas id="jiggle-canvas" width="300" height="150"
+              style="width:100%;background:#0d1117;border:1px solid #1e4480;
+                     border-radius:8px;cursor:crosshair;touch-action:none;"></canvas>
+      <div style="margin-top:0.5rem;display:flex;gap:0.5rem;flex-wrap:wrap;">
+        <button id="btn-jiggle-clear" class="btn-primary" style="flex:1;">Clear</button>
+        <label class="btn-primary" style="flex:1;display:flex;align-items:center;
+               justify-content:center;cursor:pointer;padding:0.7rem 0.5rem;
+               font-size:0.9rem;font-weight:600;letter-spacing:0.02em;">
+          Load SVG
+          <input type="file" id="jiggle-svg-upload" accept=".svg,image/svg+xml"
+                 style="display:none;" />
+        </label>
+        <button id="btn-jiggle-set" class="btn-green" style="flex:1;" disabled>Set Jiggle</button>
+      </div>
     </div>
 
     <button class="btn-send" id="btn-save-settings" style="width:100%;padding:0.75rem;">Save</button>

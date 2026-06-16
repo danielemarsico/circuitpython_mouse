@@ -12,11 +12,11 @@ Format: `[YYYY-MM-DD] - Description`
 - `README.md` tab layout section documenting Mouse, Cipher, Trackpad, and Settings tabs
 - `CLAUDE.md` rule requiring `CHANGELOG.md` update before every commit/push
 
-### Planned
-- Trackpad tab with Draw Mode, Right Click, and Sensitivity controls
-- Jiggle Speed & Range sliders in Settings
-- Jiggle Path canvas with freehand drawing and SVG upload
-- Device firmware: `PRESS`, `RELEASE`, `JIGGLE`, `JIGGLEPATH` commands
+### Changed
+- `[2026-06-16]` - Device firmware: added `PRESS`, `RELEASE`, `JIGGLE`, and `JIGGLEPATH` commands to `handle_command()` in `device/code.py`
+- `[2026-06-16]` - Web UI: added Trackpad tab/panel with Draw Mode toggle, Right Click button, and Sensitivity slider in `app/index.html`
+- `[2026-06-16]` - Web UI: added Jiggle Speed & Range sliders and Jiggle Path canvas (freehand + SVG upload) to Settings panel in `app/index.html`
+- `[2026-06-16]` - Web logic: implemented trackpad pointer events (40ms throttle), draw mode hold-release, jiggle slider persistence, jiggle canvas drawing, SVG upload with path sampling, and Set Jiggle command in `app/app.js`
 
 ---
 

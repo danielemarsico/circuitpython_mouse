@@ -87,7 +87,7 @@ def _decrypt_cipher(b64_payload):
 
 
 def handle_command(cmd):
-    global status, move_index, last_movement, layout
+    global status, move_index, last_movement, layout, JIGGLE_INTERVAL, JIGGLE_MOVES
     cmd = cmd.strip()
     parts = cmd.split()
     verb = parts[0].upper() if parts else ""
@@ -120,6 +120,38 @@ def handle_command(cmd):
         try:
             m.move(0, 0, int(parts[1]))
         except ValueError:
+            pass
+    elif verb == "PRESS":
+        btn = parts[1].upper() if len(parts) > 1 else "LEFT"
+        if btn == "RIGHT":
+            m.press(Mouse.RIGHT_BUTTON)
+        elif btn == "MIDDLE":
+            m.press(Mouse.MIDDLE_BUTTON)
+        else:
+            m.press(Mouse.LEFT_BUTTON)
+    elif verb == "RELEASE":
+        btn = parts[1].upper() if len(parts) > 1 else "LEFT"
+        if btn == "RIGHT":
+            m.release(Mouse.RIGHT_BUTTON)
+        elif btn == "MIDDLE":
+            m.release(Mouse.MIDDLE_BUTTON)
+        else:
+            m.release(Mouse.LEFT_BUTTON)
+    elif verb == "JIGGLE" and len(parts) >= 3:
+        try:
+            JIGGLE_INTERVAL = float(parts[1])
+            amp = int(parts[2])
+            JIGGLE_MOVES = [(amp, 0, 0), (0, amp, 0), (-amp, 0, 0), (0, -amp, 0)]
+        except ValueError:
+            pass
+    elif verb == "JIGGLEPATH" and len(parts) >= 2:
+        try:
+            nums = [int(n) for n in parts[1].split(",")]
+            pairs = [(nums[i], nums[i + 1], 0) for i in range(0, len(nums) - 1, 2)]
+            if pairs:
+                JIGGLE_MOVES = pairs
+                move_index = 0
+        except (ValueError, IndexError):
             pass
     elif verb == "TYPE" and len(cmd) > 5:
         try:

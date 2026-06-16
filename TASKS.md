@@ -2,32 +2,32 @@
 
 ## Phase 1 — Device Firmware (`device/code.py`)
 
-- [ ] Add `PRESS [LEFT|RIGHT|MIDDLE]` command to `handle_command()`
-- [ ] Add `RELEASE [LEFT|RIGHT|MIDDLE]` command to `handle_command()`
-- [ ] Add `JIGGLE speed amplitude` command to `handle_command()`; declare `JIGGLE_INTERVAL` and `JIGGLE_MOVES` as `global`
-- [ ] Add `JIGGLEPATH dx1,dy1,...` command to `handle_command()`; reset `move_index` to 0 on update
+- [x] Add `PRESS [LEFT|RIGHT|MIDDLE]` command to `handle_command()`
+- [x] Add `RELEASE [LEFT|RIGHT|MIDDLE]` command to `handle_command()`
+- [x] Add `JIGGLE speed amplitude` command to `handle_command()`; declare `JIGGLE_INTERVAL` and `JIGGLE_MOVES` as `global`
+- [x] Add `JIGGLEPATH dx1,dy1,...` command to `handle_command()`; reset `move_index` to 0 on update
 
 ## Phase 2 — HTML (`app/index.html`)
 
-- [ ] Add "Trackpad" tab button (between Cipher and Settings)
-- [ ] Add Trackpad panel (`#panel-trackpad`) with: trackpad area, Draw Mode toggle, Right Click button, Sensitivity slider
-- [ ] Add "Jiggle Speed & Range" card inside Settings panel (before Save button)
-- [ ] Add "Jiggle Path" card inside Settings panel (canvas + Clear / Load SVG / Set Jiggle buttons)
+- [x] Add "Trackpad" tab button (between Cipher and Settings)
+- [x] Add Trackpad panel (`#panel-trackpad`) with: trackpad area, Draw Mode toggle, Right Click button, Sensitivity slider
+- [x] Add "Jiggle Speed & Range" card inside Settings panel (before Save button)
+- [x] Add "Jiggle Path" card inside Settings panel (canvas + Clear / Load SVG / Set Jiggle buttons)
 
 ## Phase 3 — JavaScript (`app/app.js`)
 
-- [ ] Add `#btn-right-click` to `cmdButtons` querySelectorAll so it auto-disables when disconnected
-- [ ] Implement Draw Mode toggle (`drawMode` flag, button label/class swap)
-- [ ] Wire Right Click button → `sendCommand('CLICK RIGHT')`
-- [ ] Wire Sensitivity slider → live display update
-- [ ] Implement trackpad pointer events (`pointerdown`, `pointermove`, `pointerup`) with 40 ms throttle and draw-mode PRESS/RELEASE
-- [ ] Implement Jiggle Speed/Range sliders with live display
-- [ ] Load jiggle slider values from `localStorage` on init
-- [ ] Persist and send `JIGGLE` command in existing `btnSaveSettings` handler
-- [ ] Implement Jiggle Path canvas freehand drawing (pointerdown/move/up)
-- [ ] Implement SVG upload + `sampleSvgPath()` helper + canvas preview
-- [ ] Implement Clear button for jiggle canvas
-- [ ] Implement "Set Jiggle" button — downsample path, convert to deltas, send `JIGGLEPATH`
+- [x] Add `#btn-right-click` to `cmdButtons` querySelectorAll so it auto-disables when disconnected
+- [x] Implement Draw Mode toggle (`drawMode` flag, button label/class swap)
+- [x] Wire Right Click button → `sendCommand('CLICK RIGHT')`
+- [x] Wire Sensitivity slider → live display update
+- [x] Implement trackpad pointer events (`pointerdown`, `pointermove`, `pointerup`) with 40 ms throttle and draw-mode PRESS/RELEASE
+- [x] Implement Jiggle Speed/Range sliders with live display
+- [x] Load jiggle slider values from `localStorage` on init
+- [x] Persist and send `JIGGLE` command in existing `btnSaveSettings` handler
+- [x] Implement Jiggle Path canvas freehand drawing (pointerdown/move/up)
+- [x] Implement SVG upload + `sampleSvgPath()` helper + canvas preview
+- [x] Implement Clear button for jiggle canvas
+- [x] Implement "Set Jiggle" button — downsample path, convert to deltas, send `JIGGLEPATH`
 
 ## Phase 4 — Verification
 

@@ -40,7 +40,7 @@ const btnCustom     = document.getElementById('btn-custom');
 const customInput   = document.getElementById('custom-cmd');
 
 // All buttons that require a BLE connection
-const cmdButtons = document.querySelectorAll('[data-cmd], [data-move], #btn-move, #btn-scroll-up, #btn-scroll-down, #btn-custom, #btn-type, #btn-enter, #btn-cipher');
+const cmdButtons = document.querySelectorAll('[data-cmd], [data-move], #btn-move, #btn-scroll-up, #btn-scroll-down, #btn-custom, #btn-type, #btn-enter, #btn-cipher, #btn-right-click');
 
 // --- Logging ---
 function addLog(msg, color = '#4ade80') {
@@ -372,4 +372,178 @@ btnCipher.addEventListener('click', async () => {
 });
 cipherInput.addEventListener('keydown', e => {
   if (e.key === 'Enter') btnCipher.click();
+});
+
+// --- Draw mode toggle ---
+let drawMode = false;
+const btnDrawMode = document.getElementById('btn-draw-mode');
+btnDrawMode.addEventListener('click', () => {
+  drawMode = !drawMode;
+  btnDrawMode.textContent = drawMode ? 'Draw Mode ON' : 'Draw Mode OFF';
+  btnDrawMode.className = drawMode ? 'btn-green' : 'btn-primary';
+});
+
+// --- Trackpad sensitivity ---
+const sensitivitySlider = document.getElementById('trackpad-sensitivity');
+const sensitivityVal    = document.getElementById('sensitivity-val');
+sensitivitySlider.addEventListener('input', () => {
+  sensitivityVal.textContent = sensitivitySlider.value;
+});
+
+// --- Trackpad pointer events ---
+const trackpad = document.getElementById('trackpad-area');
+let lastSendTime = 0;
+let tpStartTime, tpMoved;
+
+trackpad.addEventListener('pointerdown', e => {
+  trackpad.setPointerCapture(e.pointerId);
+  tpStartTime = Date.now(); tpMoved = false;
+  if (drawMode) sendCommand('PRESS LEFT');
+  e.preventDefault();
+});
+
+trackpad.addEventListener('pointermove', e => {
+  const events = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
+  let totalDx = 0, totalDy = 0;
+  for (const ce of events) { totalDx += ce.movementX; totalDy += ce.movementY; }
+  const sens = parseInt(sensitivitySlider.value);
+  const dx = Math.round(totalDx * sens);
+  const dy = Math.round(totalDy * sens);
+  if (dx !== 0 || dy !== 0) {
+    tpMoved = true;
+    const now = Date.now();
+    if (now - lastSendTime >= 40) {
+      sendCommand(`MOVE ${dx} ${dy}`);
+      lastSendTime = now;
+    }
+  }
+  e.preventDefault();
+});
+
+trackpad.addEventListener('pointerup', e => {
+  if (drawMode) {
+    sendCommand('RELEASE LEFT');
+  } else if (!tpMoved && Date.now() - tpStartTime < 200) {
+    sendCommand('CLICK LEFT');
+  }
+  e.preventDefault();
+});
+
+// --- Jiggle Speed & Range sliders ---
+const jiggleSpeedSlider = document.getElementById('jiggle-speed');
+const jiggleSpeedVal    = document.getElementById('jiggle-speed-val');
+const jiggleRangeSlider = document.getElementById('jiggle-range');
+const jiggleRangeVal    = document.getElementById('jiggle-range-val');
+
+jiggleSpeedSlider.addEventListener('input', () => {
+  jiggleSpeedVal.textContent = jiggleSpeedSlider.value + 's';
+});
+jiggleRangeSlider.addEventListener('input', () => {
+  jiggleRangeVal.textContent = jiggleRangeSlider.value + 'px';
+});
+
+// Load from localStorage on init
+jiggleSpeedSlider.value = localStorage.getItem('jiggleSpeed') ?? '2';
+jiggleSpeedVal.textContent = jiggleSpeedSlider.value + 's';
+jiggleRangeSlider.value = localStorage.getItem('jiggleRange') ?? '2';
+jiggleRangeVal.textContent = jiggleRangeSlider.value + 'px';
+
+// Persist and send on Save (extend existing btnSaveSettings handler)
+btnSaveSettings.addEventListener('click', () => {
+  localStorage.setItem('jiggleSpeed', jiggleSpeedSlider.value);
+  localStorage.setItem('jiggleRange', jiggleRangeSlider.value);
+  if (rxCharacteristic) {
+    sendCommand(`JIGGLE ${jiggleSpeedSlider.value} ${jiggleRangeSlider.value}`);
+  }
+});
+
+// --- Jiggle Path canvas ---
+const jiggleCanvas = document.getElementById('jiggle-canvas');
+const jCtx = jiggleCanvas.getContext('2d');
+let jigglePath = [];
+let jDrawing = false;
+
+jiggleCanvas.addEventListener('pointerdown', e => {
+  jDrawing = true; jigglePath = [];
+  jCtx.clearRect(0, 0, jiggleCanvas.width, jiggleCanvas.height);
+  jCtx.beginPath();
+  const r = jiggleCanvas.getBoundingClientRect();
+  const sx = jiggleCanvas.width / r.width, sy = jiggleCanvas.height / r.height;
+  jCtx.moveTo((e.clientX - r.left) * sx, (e.clientY - r.top) * sy);
+  jigglePath.push({ x: (e.clientX - r.left) * sx, y: (e.clientY - r.top) * sy });
+  e.preventDefault();
+});
+
+jiggleCanvas.addEventListener('pointermove', e => {
+  if (!jDrawing) return;
+  const r = jiggleCanvas.getBoundingClientRect();
+  const sx = jiggleCanvas.width / r.width, sy = jiggleCanvas.height / r.height;
+  const x = (e.clientX - r.left) * sx, y = (e.clientY - r.top) * sy;
+  jCtx.lineTo(x, y);
+  jCtx.strokeStyle = '#3b82f6'; jCtx.lineWidth = 2; jCtx.stroke();
+  jigglePath.push({ x, y });
+  e.preventDefault();
+});
+
+jiggleCanvas.addEventListener('pointerup', () => {
+  jDrawing = false;
+  document.getElementById('btn-jiggle-set').disabled = jigglePath.length < 2;
+});
+
+// --- Clear button ---
+document.getElementById('btn-jiggle-clear').addEventListener('click', () => {
+  jCtx.clearRect(0, 0, jiggleCanvas.width, jiggleCanvas.height);
+  jigglePath = [];
+  document.getElementById('btn-jiggle-set').disabled = true;
+});
+
+// --- SVG path sampling helper ---
+function sampleSvgPath(pathEl, numPoints) {
+  const total = pathEl.getTotalLength();
+  const pts = [];
+  for (let i = 0; i < numPoints; i++) {
+    const pt = pathEl.getPointAtLength((i / (numPoints - 1)) * total);
+    pts.push({ x: pt.x, y: pt.y });
+  }
+  const minX = Math.min(...pts.map(p => p.x)), maxX = Math.max(...pts.map(p => p.x));
+  const minY = Math.min(...pts.map(p => p.y)), maxY = Math.max(...pts.map(p => p.y));
+  const scaleX = maxX > minX ? (jiggleCanvas.width  - 20) / (maxX - minX) : 1;
+  const scaleY = maxY > minY ? (jiggleCanvas.height - 20) / (maxY - minY) : 1;
+  return pts.map(p => ({ x: (p.x - minX) * scaleX + 10, y: (p.y - minY) * scaleY + 10 }));
+}
+
+// --- SVG upload + preview ---
+document.getElementById('jiggle-svg-upload').addEventListener('change', e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = evt => {
+    const parser = new DOMParser();
+    const svgDoc = parser.parseFromString(evt.target.result, 'image/svg+xml');
+    const pathEl = svgDoc.querySelector('path');
+    if (!pathEl) { addLog('! No <path> found in SVG', '#f87171'); return; }
+    const pts = sampleSvgPath(pathEl, 30);
+    if (pts.length < 2) { addLog('! SVG path too short', '#f87171'); return; }
+    jCtx.clearRect(0, 0, jiggleCanvas.width, jiggleCanvas.height);
+    jCtx.beginPath();
+    pts.forEach((p, i) => i === 0 ? jCtx.moveTo(p.x, p.y) : jCtx.lineTo(p.x, p.y));
+    jCtx.strokeStyle = '#3b82f6'; jCtx.lineWidth = 2; jCtx.stroke();
+    jigglePath = pts;
+    document.getElementById('btn-jiggle-set').disabled = false;
+  };
+  reader.readAsText(file);
+});
+
+// --- "Set Jiggle" button ---
+document.getElementById('btn-jiggle-set').addEventListener('click', () => {
+  if (jigglePath.length < 2) return;
+  const step = Math.ceil(jigglePath.length / 30);
+  const sampled = jigglePath.filter((_, i) => i % step === 0);
+  const scale = 20 / Math.max(jiggleCanvas.width, jiggleCanvas.height);
+  const nums = [];
+  for (let i = 1; i < sampled.length; i++) {
+    nums.push(Math.round((sampled[i].x - sampled[i - 1].x) * scale));
+    nums.push(Math.round((sampled[i].y - sampled[i - 1].y) * scale));
+  }
+  sendCommand('JIGGLEPATH ' + nums.join(','));
 });
