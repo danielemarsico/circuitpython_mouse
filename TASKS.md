@@ -35,6 +35,6 @@
 - [x] Draw Mode ON on Trackpad tab → drag finger → verify stroke in Paint
 - [x] Tap trackpad (< 200 ms) → verify left click fires without drawing
 - [x] Right Click button → verify context menu appears
-- [ ] Adjust Jiggle speed/range sliders → Save → verify jiggle behavior changes
+- [x] Adjust Jiggle speed/range sliders → Save → verify jiggle behavior changes
 - [x] Draw path on canvas → Set Jiggle → verify cursor traces shape
-- [ ] Upload SVG → Set Jiggle → verify cursor follows path
+- [x] Upload SVG → Set Jiggle → verify cursor follows path
