@@ -31,7 +31,7 @@
 
 ## Phase 4 — Verification
 
-- [ ] Flash updated `code.py`; confirm `PRESS LEFT` / `RELEASE LEFT` hold/release in Paint
+- [x] Flash updated `code.py`; confirm `PRESS LEFT` / `RELEASE LEFT` hold/release in Paint
 - [x] Draw Mode ON on Trackpad tab → drag finger → verify stroke in Paint
 - [x] Tap trackpad (< 200 ms) → verify left click fires without drawing
 - [x] Right Click button → verify context menu appears

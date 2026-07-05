@@ -8,6 +8,7 @@ Format: `[YYYY-MM-DD] - Description`
 ## [Unreleased]
 
 ### Fixed
+- `[2026-07-05]` - Fix JIGGLEPATH scaling: deltas now normalised so the largest step equals the Range slider value, preventing sub-pixel (1px) movements from SVG paths
 - `[2026-07-05]` - BLE write queue added to `sendCommand()` in `app/app.js` to prevent "GATT operation already in progress" error when multiple commands fire in rapid succession (e.g. Save button sending LAYOUT + JIGGLE)
 
 ### Added

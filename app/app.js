@@ -540,11 +540,14 @@ document.getElementById('btn-jiggle-set').addEventListener('click', () => {
   if (jigglePath.length < 2) return;
   const step = Math.ceil(jigglePath.length / 30);
   const sampled = jigglePath.filter((_, i) => i % step === 0);
-  const scale = 20 / Math.max(jiggleCanvas.width, jiggleCanvas.height);
-  const nums = [];
+  const rawDeltas = [];
   for (let i = 1; i < sampled.length; i++) {
-    nums.push(Math.round((sampled[i].x - sampled[i - 1].x) * scale));
-    nums.push(Math.round((sampled[i].y - sampled[i - 1].y) * scale));
+    rawDeltas.push(sampled[i].x - sampled[i - 1].x);
+    rawDeltas.push(sampled[i].y - sampled[i - 1].y);
   }
-  sendCommand('JIGGLEPATH ' + nums.join(','));
+  // Scale so the largest delta equals the range slider value
+  const maxDelta = Math.max(...rawDeltas.map(Math.abs));
+  const targetRange = parseInt(jiggleRangeSlider.value) || 20;
+  const scale = maxDelta > 0 ? targetRange / maxDelta : 1;
+  sendCommand('JIGGLEPATH ' + rawDeltas.map(d => Math.round(d * scale)).join(','));
 });
