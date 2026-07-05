@@ -7,6 +7,9 @@ Format: `[YYYY-MM-DD] - Description`
 
 ## [Unreleased]
 
+### Fixed
+- `[2026-07-05]` - BLE write queue added to `sendCommand()` in `app/app.js` to prevent "GATT operation already in progress" error when multiple commands fire in rapid succession (e.g. Save button sending LAYOUT + JIGGLE)
+
 ### Added
 - `TASKS.md` with phased implementation checklist for trackpad/jiggle features
 - `README.md` tab layout section documenting Mouse, Cipher, Trackpad, and Settings tabs

@@ -66,19 +66,20 @@ window.addEventListener('unhandledrejection', e => {
 });
 
 // --- BLE send ---
-async function sendCommand(cmd) {
+let _bleQueue = Promise.resolve();
+
+function sendCommand(cmd) {
   if (!rxCharacteristic) return;
   const trimmed = cmd.trim();
   const upper = trimmed.toUpperCase();
   // Preserve original case for TYPE so the text is typed as-is
   const line = (upper.startsWith('TYPE ') ? 'TYPE ' + trimmed.slice(5) : upper) + '\n';
   const data = new TextEncoder().encode(line);
-  try {
-    await rxCharacteristic.writeValue(data);
-    addLog('> ' + cmd.trim());
-  } catch (e) {
-    addLog('! ' + e.message, '#f87171');
-  }
+  _bleQueue = _bleQueue.then(() =>
+    rxCharacteristic.writeValue(data)
+      .then(() => addLog('> ' + cmd.trim()))
+      .catch(e => addLog('! ' + e.message, '#f87171'))
+  );
 }
 
 // --- Connection state ---
