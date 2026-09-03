@@ -13,6 +13,8 @@ Format: `[YYYY-MM-DD] - Description`
 - `[2026-07-05]` - BLE write queue added to `sendCommand()` in `app/app.js` to prevent "GATT operation already in progress" error when multiple commands fire in rapid succession (e.g. Save button sending LAYOUT + JIGGLE)
 
 ### Added
+- `[2026-09-03]` - `device/boot.py`: dongle now enumerates as USB HID only (no `CIRCUITPY` drive); hold the on-board button while plugging in to re-enable the drive for code updates
+- `[2026-09-03]` - README section "Hiding the USB Drive (HID-only mode)" documenting the escape hatch and recovery options
 - `TASKS.md` with phased implementation checklist for trackpad/jiggle features
 - `README.md` tab layout section documenting Mouse, Cipher, Trackpad, and Settings tabs
 - `CLAUDE.md` rule requiring `CHANGELOG.md` update before every commit/push
