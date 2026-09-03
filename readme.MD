@@ -25,6 +25,7 @@ Configured for the [MDBT50Q-RX](https://circuitpython.org/board/raytac_mdbt50q-r
 
 Copy the following onto the `CIRCUITPY` drive:
 
+- `device/boot.py` → `CIRCUITPY/boot.py` *(optional — hides the USB drive, see below)*
 - `device/code.py` → `CIRCUITPY/code.py`
 - `device/lib/` → `CIRCUITPY/lib/`
 - `device/secret.txt` → `CIRCUITPY/secret.txt` *(required for the CIPHER command — edit it first)*
@@ -35,6 +36,27 @@ Copy the following onto the `CIRCUITPY` drive:
 > ```
 
 The code runs automatically on boot.
+
+### Hiding the USB Drive (HID-only mode)
+
+By default a CircuitPython board enumerates as **both** a USB HID device and a
+`CIRCUITPY` mass-storage drive. Copying `device/boot.py` onto the board makes it
+enumerate as **HID only** — no drive appears when you plug it into a PC.
+
+To get the drive back and edit the code again:
+
+1. Unplug the dongle.
+2. **Hold the on-board button** and plug it back in (keep holding for ~1 s).
+3. `CIRCUITPY` mounts as usual and the LED lights up to confirm maintenance mode.
+4. Edit the files, then unplug and re-plug **without** holding the button.
+
+The USB serial console (REPL) stays enabled in both modes, so you can still
+recover with `storage.enable_usb_drive()` from the REPL if needed. As a last
+resort, double-tap the reset button to enter the bootloader and re-flash the
+`.uf2` firmware (this erases the filesystem).
+
+> **Note:** `boot.py` only runs on power-up or a hard reset — not on a soft
+> reload after saving a file.
 
 ---
 
@@ -265,6 +287,7 @@ app/
 └── docker-compose.yml   # Compose file (port 9090)
 
 device/
+├── boot.py              # USB setup: HID-only unless the button is held at boot
 ├── code.py              # Main CircuitPython script
 ├── secret.txt           # Pre-shared password for CIPHER command (copy to CIRCUITPY/)
 ├── firmware/            # Bootloader updater + CircuitPython 10.1.3 (.uf2)
