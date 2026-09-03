@@ -43,8 +43,10 @@ if [[ -z "$TARGET" ]]; then
         cat >&2 <<'EOF'
 error: no CIRCUITPY drive found.
 
-If boot.py is already installed the drive is hidden by design: unplug the
-dongle, hold the on-board button, plug it back in, then re-run this script.
+If boot.py is already installed the drive is hidden by design. With the dongle
+plugged in and running, hold the button for 3 seconds (or send the BLE command
+MAINTENANCE) to reboot into maintenance mode, then re-run this script.
+Do not hold the button while plugging in: that enters the UF2 bootloader.
 You can also pass the mount point explicitly:  ./install.sh /media/me/CIRCUITPY
 EOF
         exit 1

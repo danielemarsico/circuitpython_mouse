@@ -1,6 +1,9 @@
 import time
+import os
 import board
 import digitalio
+import microcontroller
+import storage
 import usb_hid
 import binascii
 import aesio
@@ -65,6 +68,32 @@ ble_was_connected = False
 status = True
 move_index = 0
 last_movement = time.monotonic()
+
+# Maintenance mode: boot.py hides the CIRCUITPY drive, so the drive is brought
+# back by dropping this flag file and resetting. The button cannot be used at
+# power-up because holding it there enters the UF2 bootloader instead.
+MAINTENANCE_FLAG = "maintenance.flag"
+LONG_PRESS = 3  # seconds to hold the button to enter maintenance mode
+press_started = None
+maintenance_armed = False
+
+
+def enter_maintenance():
+    """Flag the next boot as maintenance mode and reset into it."""
+    try:
+        storage.remount("/", readonly=False)
+        with open(MAINTENANCE_FLAG, "w") as f:
+            f.write("1")
+        storage.remount("/", readonly=True)
+    except (OSError, RuntimeError) as e:
+        # Remount fails while the host has the drive mounted, i.e. we are
+        # already in maintenance mode and there is nothing to do.
+        print("maintenance flag not written:", e)
+        return False
+    print("rebooting into maintenance mode")
+    time.sleep(0.2)
+    microcontroller.reset()
+
 
 # Jiggler config
 JIGGLE_INTERVAL = 2  # seconds between each move
@@ -175,6 +204,9 @@ def handle_command(cmd):
                 return "Layout: IT"
             else:
                 return "Layout IT not available"
+    elif verb == "MAINTENANCE":
+        if enter_maintenance() is False:
+            return "Maintenance mode unavailable (drive already mounted)"
     elif verb == "CIPHER" and len(parts) >= 2:
         if cipher_key:
             try:
@@ -189,7 +221,18 @@ while True:
     now = time.monotonic()
     switch.update()
     if switch.fell:
-        status = not status
+        press_started = now
+        maintenance_armed = False
+    elif switch.rose:
+        # A short press toggles jiggling; a long press already acted on release.
+        if not maintenance_armed:
+            status = not status
+        press_started = None
+        maintenance_armed = False
+    elif press_started is not None and not maintenance_armed:
+        if now - press_started >= LONG_PRESS:
+            maintenance_armed = True
+            enter_maintenance()
 
     # BLE: handle reconnection and incoming commands
     if ble.connected:

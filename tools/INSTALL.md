@@ -15,13 +15,14 @@ install.ps1         # Windows installer
 ## Mount the drive first
 
 If `boot.py` is already installed, the `CIRCUITPY` drive is hidden by design.
-Unplug the dongle, **hold the user button** (the one that toggles jiggling, not
-RESET), plug it back in and keep holding for ~2 s — the drive appears and the
-LED lights to confirm maintenance mode. The button must already be held when
-the board powers up; `boot.py` reads it immediately.
+Do **not** hold the button while plugging in — that enters the UF2 bootloader.
+Instead, with the dongle plugged in and running:
 
-Release the button once the drive shows up, install, then unplug and re-plug
-**without** holding it to return to HID-only mode.
+- **hold the button for 3 seconds**, or
+- send the BLE command **`MAINTENANCE`** from the web app.
+
+The board resets and the `CIRCUITPY` drive appears for that one boot. Install,
+then unplug and re-plug to return to HID-only mode.
 
 ## Linux / macOS
 
