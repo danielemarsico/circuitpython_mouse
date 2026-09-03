@@ -64,6 +64,11 @@ Both installers copy `boot.py`, `code.py` and `lib/`, **keep an existing
 Linux. The scripts also run straight from a repo checkout (`tools/install.sh`),
 using `device/` as the payload. See `tools/INSTALL.md` for details.
 
+Publishing a GitHub release builds this archive automatically
+(`.github/workflows/release-package.yml`) and attaches
+`circuitpython_mouse-device-<tag>.zip` to the release, so you can just download
+it from the Releases page instead of building it yourself.
+
 > Remember: once `boot.py` is installed the drive is hidden — hold the button
 > while plugging in before running an installer.
 
