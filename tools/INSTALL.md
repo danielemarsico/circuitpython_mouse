@@ -15,8 +15,13 @@ install.ps1         # Windows installer
 ## Mount the drive first
 
 If `boot.py` is already installed, the `CIRCUITPY` drive is hidden by design.
-**Unplug the dongle, hold the on-board button, plug it back in** — the drive
-appears and the LED lights to confirm maintenance mode.
+Unplug the dongle, **hold the user button** (the one that toggles jiggling, not
+RESET), plug it back in and keep holding for ~2 s — the drive appears and the
+LED lights to confirm maintenance mode. The button must already be held when
+the board powers up; `boot.py` reads it immediately.
+
+Release the button once the drive shows up, install, then unplug and re-plug
+**without** holding it to return to HID-only mode.
 
 ## Linux / macOS
 

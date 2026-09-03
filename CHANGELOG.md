@@ -12,6 +12,9 @@ Format: `[YYYY-MM-DD] - Description`
 - `[2026-07-05]` - Fix JIGGLEPATH scaling: deltas now normalised so the largest step equals the Range slider value, preventing sub-pixel (1px) movements from SVG paths
 - `[2026-07-05]` - BLE write queue added to `sendCommand()` in `app/app.js` to prevent "GATT operation already in progress" error when multiple commands fire in rapid succession (e.g. Save button sending LAYOUT + JIGGLE)
 
+### Fixed
+- `[2026-09-03]` - README recovery instructions: `storage.enable_usb_drive()` cannot be called from the REPL (it is `boot.py`-only); documented the correct fallback (`storage.remount("/", readonly=False)` to neutralise `boot.py`) and clarified the button-hold timing for maintenance mode
+
 ### Added
 - `[2026-09-03]` - `.github/workflows/release-package.yml`: publishing a GitHub release now builds the device zip automatically and attaches it to the release as a downloadable asset
 - `[2026-09-03]` - `tools/build_package.py` builds a downloadable `dist/circuitpython_mouse-device-<version>.zip` containing the `CIRCUITPY/` payload, `secret.txt.example` and both installers

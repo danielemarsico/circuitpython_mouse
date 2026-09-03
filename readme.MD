@@ -78,20 +78,41 @@ By default a CircuitPython board enumerates as **both** a USB HID device and a
 `CIRCUITPY` mass-storage drive. Copying `device/boot.py` onto the board makes it
 enumerate as **HID only** — no drive appears when you plug it into a PC.
 
-To get the drive back and edit the code again:
+### Getting the drive back (maintenance mode)
+
+To upgrade the code you need the drive again — hold the **user button** (the
+same one that toggles jiggling, *not* RESET) while the board powers up:
 
 1. Unplug the dongle.
-2. **Hold the on-board button** and plug it back in (keep holding for ~1 s).
-3. `CIRCUITPY` mounts as usual and the LED lights up to confirm maintenance mode.
-4. Edit the files, then unplug and re-plug **without** holding the button.
+2. Press and **hold** the user button.
+3. Keeping it held, plug the USB back in and hold for another ~2 s.
+4. `CIRCUITPY` mounts and the LED lights up to confirm maintenance mode — release.
+5. Copy the new files (or run one of the installers in `tools/`).
+6. Unplug and re-plug **without** holding the button to go back to HID-only.
 
-The USB serial console (REPL) stays enabled in both modes, so you can still
-recover with `storage.enable_usb_drive()` from the REPL if needed. As a last
-resort, double-tap the reset button to enter the bootloader and re-flash the
-`.uf2` firmware (this erases the filesystem).
+Timing matters: `boot.py` reads the button in the first fraction of a second
+after power-up, well before `code.py`'s startup delay. If the board is already
+plugged in you can hold the button and tap **RESET** instead of unplugging.
 
 > **Note:** `boot.py` only runs on power-up or a hard reset — not on a soft
 > reload after saving a file.
+
+### If you can't get into maintenance mode
+
+The USB serial console (REPL) stays enabled in both modes. `enable_usb_drive()`
+and `disable_usb_drive()` only work *inside* `boot.py`, so you cannot re-enable
+the drive from the REPL — but with the drive disabled CircuitPython itself may
+write to the filesystem, so you can neutralise `boot.py` from the REPL and hard
+reset:
+
+```python
+import storage
+storage.remount("/", readonly=False)
+open("boot.py", "w").write("")
+```
+
+As a last resort, double-tap the RESET button to enter the bootloader and
+re-flash the `.uf2` firmware (this erases the filesystem).
 
 ---
 
