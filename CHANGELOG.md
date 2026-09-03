@@ -13,6 +13,9 @@ Format: `[YYYY-MM-DD] - Description`
 - `[2026-07-05]` - BLE write queue added to `sendCommand()` in `app/app.js` to prevent "GATT operation already in progress" error when multiple commands fire in rapid succession (e.g. Save button sending LAYOUT + JIGGLE)
 
 ### Added
+- `[2026-09-03]` - `tools/build_package.py` builds a downloadable `dist/circuitpython_mouse-device-<version>.zip` containing the `CIRCUITPY/` payload, `secret.txt.example` and both installers
+- `[2026-09-03]` - `tools/install.sh` (Linux/macOS) and `tools/install.ps1` (Windows) install or upgrade a mounted `CIRCUITPY` drive, auto-detecting the mount point and preserving an existing `secret.txt`
+- `[2026-09-03]` - `tools/INSTALL.md` plus a README "Packaged Install / Upgrade" section
 - `[2026-09-03]` - `device/boot.py`: dongle now enumerates as USB HID only (no `CIRCUITPY` drive); hold the on-board button while plugging in to re-enable the drive for code updates
 - `[2026-09-03]` - README section "Hiding the USB Drive (HID-only mode)" documenting the escape hatch and recovery options
 - `TASKS.md` with phased implementation checklist for trackpad/jiggle features
