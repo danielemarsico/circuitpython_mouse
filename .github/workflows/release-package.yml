@@ -1,0 +1,47 @@
+# Attach the device package to every published GitHub release.
+name: Package device firmware
+
+on:
+  release:
+    types: [published]
+
+  # Allows building the archive manually from the Actions tab (no upload).
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Build package
+        id: build
+        env:
+          # Release tag (e.g. v1.2.0) for a release run, short SHA otherwise.
+          VERSION: ${{ github.event_name == 'release' && github.event.release.tag_name || github.sha }}
+        run: |
+          python3 tools/build_package.py --version "$VERSION" --output-dir dist
+          echo "archive=$(ls dist/*.zip)" >> "$GITHUB_OUTPUT"
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: device-package
+          path: dist/*.zip
+
+      - name: Attach archive to the release
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.event.release.tag_name }}
+          ARCHIVE: ${{ steps.build.outputs.archive }}
+        run: gh release upload "$TAG" "$ARCHIVE" --clobber --repo "$GITHUB_REPOSITORY"

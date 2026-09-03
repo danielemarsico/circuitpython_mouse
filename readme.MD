@@ -37,6 +37,41 @@ Copy the following onto the `CIRCUITPY` drive:
 
 The code runs automatically on boot.
 
+### Packaged Install / Upgrade
+
+Instead of copying files by hand you can build a release archive and use the
+installer scripts:
+
+```bash
+python3 tools/build_package.py            # writes dist/circuitpython_mouse-device-<date>.zip
+```
+
+The zip contains the `CIRCUITPY/` payload (`boot.py`, `code.py`, `lib/`), a
+`secret.txt.example`, and both installers. Unzip it on the target machine and run:
+
+```bash
+./install.sh                    # Linux/macOS, auto-detects the CIRCUITPY drive
+./install.sh /media/$USER/CIRCUITPY
+```
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\install.ps1     # Windows
+powershell -ExecutionPolicy Bypass -File .\install.ps1 -Target E:\
+```
+
+Both installers copy `boot.py`, `code.py` and `lib/`, **keep an existing
+`secret.txt`** (so upgrades don't wipe your CIPHER password), and `sync` on
+Linux. The scripts also run straight from a repo checkout (`tools/install.sh`),
+using `device/` as the payload. See `tools/INSTALL.md` for details.
+
+Publishing a GitHub release builds this archive automatically
+(`.github/workflows/release-package.yml`) and attaches
+`circuitpython_mouse-device-<tag>.zip` to the release, so you can just download
+it from the Releases page instead of building it yourself.
+
+> Remember: once `boot.py` is installed the drive is hidden — hold the button
+> while plugging in before running an installer.
+
 ### Hiding the USB Drive (HID-only mode)
 
 By default a CircuitPython board enumerates as **both** a USB HID device and a
@@ -285,6 +320,12 @@ app/
 ├── Dockerfile           # nginx:alpine container
 ├── nginx.conf           # nginx config (gzip, caching, SPA fallback)
 └── docker-compose.yml   # Compose file (port 9090)
+
+tools/
+├── build_package.py     # Builds dist/circuitpython_mouse-device-<version>.zip
+├── install.sh           # Linux/macOS installer for a mounted CIRCUITPY drive
+├── install.ps1          # Windows (PowerShell) installer
+└── INSTALL.md           # Instructions bundled inside the release zip
 
 device/
 ├── boot.py              # USB setup: HID-only unless the button is held at boot
