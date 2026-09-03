@@ -17,6 +17,7 @@ Format: `[YYYY-MM-DD] - Description`
 - `[2026-09-03]` - README recovery instructions: `storage.enable_usb_drive()` cannot be called from the REPL (it is `boot.py`-only); documented the correct fallback (`storage.remount("/", readonly=False)` to neutralise `boot.py`) and clarified the button-hold timing for maintenance mode
 
 ### Added
+- `[2026-09-03]` - README REPL recovery section: Thonny setup, how to find the serial port on Linux/Windows, and the snippet to delete `boot.py` when the installed version predates the `maintenance.flag` mechanism
 - `[2026-09-03]` - `.github/workflows/release-package.yml`: publishing a GitHub release now builds the device zip automatically and attaches it to the release as a downloadable asset
 - `[2026-09-03]` - `tools/build_package.py` builds a downloadable `dist/circuitpython_mouse-device-<version>.zip` containing the `CIRCUITPY/` payload, `secret.txt.example` and both installers
 - `[2026-09-03]` - `tools/install.sh` (Linux/macOS) and `tools/install.ps1` (Windows) install or upgrade a mounted `CIRCUITPY` drive, auto-detecting the mount point and preserving an existing `secret.txt`

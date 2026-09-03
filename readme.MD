@@ -100,20 +100,52 @@ triggers maintenance mode.
 > **Note:** `boot.py` only runs on power-up or a hard reset — not on a soft
 > reload after saving a file.
 
-### If you can't get into maintenance mode
+### If you can't get into maintenance mode (REPL recovery)
 
-The USB serial console (REPL) stays enabled in both modes. `enable_usb_drive()`
-and `disable_usb_drive()` only work *inside* `boot.py`, so you cannot re-enable
-the drive from the REPL — but with the drive hidden CircuitPython itself may
-write to the filesystem, so you can create the flag (or neutralise `boot.py`)
-from the REPL and reset:
+The USB serial console (REPL) stays enabled in both modes, and with the drive
+hidden CircuitPython may write to its own filesystem — which is what makes
+recovery possible. Note that `enable_usb_drive()` / `disable_usb_drive()` only
+work *inside* `boot.py`, so they cannot be called from the REPL.
+
+**Easiest: Thonny.** Install [Thonny](https://thonny.org/), then
+*Run → Configure interpreter…* → interpreter **CircuitPython (generic)** →
+pick the board's serial port → OK. Press **Ctrl-C** in the Shell pane to
+interrupt the running code and get a `>>>` prompt.
+
+**Or a plain terminal.** Find the port first:
+
+```bash
+ls -l /dev/serial/by-id/     # stable names, e.g. usb-Raytac_MDBT50Q-RX_...-if00
+sudo dmesg -w | grep -i tty  # or watch it appear while you plug the board in
+screen /dev/ttyACM0 115200   # exit with Ctrl-A then K   (or: tio /dev/ttyACM0)
+```
+
+On Windows the board shows up as a COM port in Device Manager; connect with
+PuTTY (Serial, 115200). `Permission denied` on Linux means you are not in the
+device's group: `sudo usermod -aG dialout $USER`, then log out and back in.
+
+Press **Ctrl-C** to interrupt `code.py` — easiest during its 10-second startup
+delay right after a replug — and at the `>>>` prompt:
 
 ```python
 import storage, microcontroller
-storage.remount("/", readonly=False)
+storage.remount("/", readonly=False)   # take write access to the filesystem
 open("maintenance.flag", "w").write("1")
+microcontroller.reset()                # hard reset: boot.py re-runs and mounts the drive
+```
+
+If the installed `boot.py` predates the flag mechanism (or you just want the
+drive back unconditionally), delete it instead:
+
+```python
+import os, storage, microcontroller
+storage.remount("/", readonly=False)
+os.remove("boot.py")
 microcontroller.reset()
 ```
+
+A soft reload (Ctrl-D) is not enough — `boot.py` and USB enumeration are only
+re-evaluated on a hard reset or power cycle.
 
 As a last resort, double-tap the RESET button to enter the bootloader and
 re-flash the `.uf2` firmware (this erases the filesystem).
