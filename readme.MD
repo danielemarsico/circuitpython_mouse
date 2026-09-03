@@ -69,8 +69,8 @@ Publishing a GitHub release builds this archive automatically
 `circuitpython_mouse-device-<tag>.zip` to the release, so you can just download
 it from the Releases page instead of building it yourself.
 
-> Remember: once `boot.py` is installed the drive is hidden — hold the button
-> while plugging in before running an installer.
+> Remember: once `boot.py` is installed the drive is hidden — put the dongle in
+> maintenance mode first (hold the button 3 s, or send `MAINTENANCE` over BLE).
 
 ### Hiding the USB Drive (HID-only mode)
 
@@ -78,20 +78,77 @@ By default a CircuitPython board enumerates as **both** a USB HID device and a
 `CIRCUITPY` mass-storage drive. Copying `device/boot.py` onto the board makes it
 enumerate as **HID only** — no drive appears when you plug it into a PC.
 
-To get the drive back and edit the code again:
+### Getting the drive back (maintenance mode)
 
-1. Unplug the dongle.
-2. **Hold the on-board button** and plug it back in (keep holding for ~1 s).
-3. `CIRCUITPY` mounts as usual and the LED lights up to confirm maintenance mode.
-4. Edit the files, then unplug and re-plug **without** holding the button.
+The on-board button **cannot** be used for this: holding it while plugging in
+enters the UF2 bootloader (`MDBT50QRX` drive), before CircuitPython — and
+therefore `boot.py` — ever runs. Instead the running firmware is asked to bring
+the drive back on the next boot:
 
-The USB serial console (REPL) stays enabled in both modes, so you can still
-recover with `storage.enable_usb_drive()` from the REPL if needed. As a last
-resort, double-tap the reset button to enter the bootloader and re-flash the
-`.uf2` firmware (this erases the filesystem).
+- **Long-press the button for 3 seconds** while the dongle is running, or
+- send the BLE command **`MAINTENANCE`** from the web app.
+
+Either one writes a `maintenance.flag` file and resets the board. `boot.py`
+finds the flag, deletes it and leaves the `CIRCUITPY` drive enabled, so the
+drive appears a second or two later. Copy your files (or run an installer from
+`tools/`), then unplug and re-plug — the flag is already consumed, so the dongle
+comes back HID-only.
+
+A short press still toggles the auto-movement; only a press held for 3 s or more
+triggers maintenance mode.
 
 > **Note:** `boot.py` only runs on power-up or a hard reset — not on a soft
 > reload after saving a file.
+
+### If you can't get into maintenance mode (REPL recovery)
+
+The USB serial console (REPL) stays enabled in both modes, and with the drive
+hidden CircuitPython may write to its own filesystem — which is what makes
+recovery possible. Note that `enable_usb_drive()` / `disable_usb_drive()` only
+work *inside* `boot.py`, so they cannot be called from the REPL.
+
+**Easiest: Thonny.** Install [Thonny](https://thonny.org/), then
+*Run → Configure interpreter…* → interpreter **CircuitPython (generic)** →
+pick the board's serial port → OK. Press **Ctrl-C** in the Shell pane to
+interrupt the running code and get a `>>>` prompt.
+
+**Or a plain terminal.** Find the port first:
+
+```bash
+ls -l /dev/serial/by-id/     # stable names, e.g. usb-Raytac_MDBT50Q-RX_...-if00
+sudo dmesg -w | grep -i tty  # or watch it appear while you plug the board in
+screen /dev/ttyACM0 115200   # exit with Ctrl-A then K   (or: tio /dev/ttyACM0)
+```
+
+On Windows the board shows up as a COM port in Device Manager; connect with
+PuTTY (Serial, 115200). `Permission denied` on Linux means you are not in the
+device's group: `sudo usermod -aG dialout $USER`, then log out and back in.
+
+Press **Ctrl-C** to interrupt `code.py` — easiest during its 10-second startup
+delay right after a replug — and at the `>>>` prompt:
+
+```python
+import storage, microcontroller
+storage.remount("/", readonly=False)   # take write access to the filesystem
+open("maintenance.flag", "w").write("1")
+microcontroller.reset()                # hard reset: boot.py re-runs and mounts the drive
+```
+
+If the installed `boot.py` predates the flag mechanism (or you just want the
+drive back unconditionally), delete it instead:
+
+```python
+import os, storage, microcontroller
+storage.remount("/", readonly=False)
+os.remove("boot.py")
+microcontroller.reset()
+```
+
+A soft reload (Ctrl-D) is not enough — `boot.py` and USB enumeration are only
+re-evaluated on a hard reset or power cycle.
+
+As a last resort, double-tap the RESET button to enter the bootloader and
+re-flash the `.uf2` firmware (this erases the filesystem).
 
 ---
 
@@ -100,6 +157,10 @@ resort, double-tap the reset button to enter the bootloader and re-flash the
 ### Physical Button
 
 Press the button on the board to toggle the auto-movement on/off. The LED indicates the current state (on = LED lit).
+
+Hold the same button for **3 seconds** to reboot into maintenance mode, which
+re-enables the `CIRCUITPY` drive for one boot (see
+[Hiding the USB Drive](#hiding-the-usb-drive-hid-only-mode)).
 
 ### Bluetooth (BLE UART)
 
@@ -124,6 +185,7 @@ Send the following text commands (terminated with a newline):
 | `TYPE text`     | Type text via USB HID keyboard (printable ASCII only, e.g. `TYPE Hello World`) |
 | `LAYOUT EN`     | Switch the keyboard layout to English (US)                  |
 | `LAYOUT IT`     | Switch the keyboard layout to Italian (Windows)             |
+| `MAINTENANCE`   | Re-enable the `CIRCUITPY` drive on the next boot and reset (see [Hiding the USB Drive](#hiding-the-usb-drive-hid-only-mode)) |
 | `CIPHER <b64>`  | Decrypt an AES-128-CTR payload and type the result (see [Cipher](#cipher)) |
 
 The board re-advertises automatically after a disconnect.

@@ -12,7 +12,12 @@ Format: `[YYYY-MM-DD] - Description`
 - `[2026-07-05]` - Fix JIGGLEPATH scaling: deltas now normalised so the largest step equals the Range slider value, preventing sub-pixel (1px) movements from SVG paths
 - `[2026-07-05]` - BLE write queue added to `sendCommand()` in `app/app.js` to prevent "GATT operation already in progress" error when multiple commands fire in rapid succession (e.g. Save button sending LAYOUT + JIGGLE)
 
+### Fixed
+- `[2026-09-03]` - Maintenance mode no longer relies on holding the button at power-up: on the MDBT50Q-RX that enters the UF2 bootloader before `boot.py` runs. `code.py` now writes a `maintenance.flag` file and resets on a 3-second button hold or the new BLE `MAINTENANCE` command, and `boot.py` consumes the flag to re-enable the `CIRCUITPY` drive for exactly one boot
+- `[2026-09-03]` - README recovery instructions: `storage.enable_usb_drive()` cannot be called from the REPL (it is `boot.py`-only); documented the correct fallback (`storage.remount("/", readonly=False)` to neutralise `boot.py`) and clarified the button-hold timing for maintenance mode
+
 ### Added
+- `[2026-09-03]` - README REPL recovery section: Thonny setup, how to find the serial port on Linux/Windows, and the snippet to delete `boot.py` when the installed version predates the `maintenance.flag` mechanism
 - `[2026-09-03]` - `.github/workflows/release-package.yml`: publishing a GitHub release now builds the device zip automatically and attaches it to the release as a downloadable asset
 - `[2026-09-03]` - `tools/build_package.py` builds a downloadable `dist/circuitpython_mouse-device-<version>.zip` containing the `CIRCUITPY/` payload, `secret.txt.example` and both installers
 - `[2026-09-03]` - `tools/install.sh` (Linux/macOS) and `tools/install.ps1` (Windows) install or upgrade a mounted `CIRCUITPY` drive, auto-detecting the mount point and preserving an existing `secret.txt`
@@ -25,6 +30,7 @@ Format: `[YYYY-MM-DD] - Description`
 - `[2026-06-16]` - Test suite: 38 Playwright browser tests with BLE mock, V8 coverage reporting (84.88% statement coverage), and README documentation in `test/webapp_tests/`
 
 ### Changed
+- `[2026-09-03]` - Physical button: short press still toggles auto-movement, a 3-second hold reboots into maintenance mode
 - `[2026-06-16]` - Device firmware: added `PRESS`, `RELEASE`, `JIGGLE`, and `JIGGLEPATH` commands to `handle_command()` in `device/code.py`
 - `[2026-06-16]` - Web UI: added Trackpad tab/panel with Draw Mode toggle, Right Click button, and Sensitivity slider in `app/index.html`
 - `[2026-06-16]` - Web UI: added Jiggle Speed & Range sliders and Jiggle Path canvas (freehand + SVG upload) to Settings panel in `app/index.html`
