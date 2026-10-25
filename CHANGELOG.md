@@ -7,6 +7,26 @@ Format: `[YYYY-MM-DD] - Description`
 
 ## [Unreleased]
 
+### Added
+- `[2026-10-25]` - Speech to Keyboard: new Voice tab (`app/voice.js`) records from the microphone, sends 16 kHz mono WAV to the DuDu worker (`POST /v1/utterance`, transcribe mode, optional `X-Tembed-Mode: dictation` agent cleanup) or uses the browser's speech recognition, and types the transcript through paced `TYPE`/`KEY` commands of 60 bytes or less; editable preview, auto-type, raw-transcript undo, IT/EN/auto speech language
+- `[2026-10-25]` - Settings card "Speech to Keyboard": engine, worker URL, API key, agent cleanup, trailing space, Test connection
+- `[2026-10-25]` - Keyboard layouts UK, DE, FR, ES (Windows, Neradoc release 20250409) in `device/lib/`; firmware layout registry with lazy import and a new `LAYOUTS` command; the app fills the layout dropdown from the dongle and adds a Layout test button
+- `[2026-10-25]` - `tools/gen_layout_charsets.py` generates `app/layouts.json` (typable characters per layout) from the pinned layout sources; the app uses it to replace or drop untypable characters
+- `[2026-10-25]` - 23 Playwright tests in `test/webapp_tests/tests/voice.spec.js` (fake microphone, routed worker); coverage report now includes `voice.js`
+- `[2026-10-25]` - `RULEBOOK.md` (v1.1): project rules, BLE command protocol, summary of shipped features and the planned Speech-to-Keyboard feature
+- `[2026-10-25]` - `PLAN.md` replaced with the Speech-to-Keyboard plan (feasibility assessment, dudu-worker CORS change, web-app typing pipeline); `TASKS.md` gains phases S1–S10, previous tasks archived as completed
+- `[2026-10-25]` - Plan/RULEBOOK v1.2: worker changes (CORS, `X-Tembed-Mode: dictation` cleanup) handed off to dudu-worker; separate speech language and host keyboard layout; firmware layout registry with `LAYOUTS` command and generated per-layout charsets
+
+### Changed
+- `[2026-10-25]` - Firmware `TYPE` and `CIPHER` type one character at a time and skip untypable characters instead of losing the rest of the text
+- `[2026-10-25]` - The app reassembles device replies split across BLE notifications, and on connect restores the saved keyboard layout (the dongle boots with US)
+- `[2026-10-25]` - Service worker (cache `ble-mouse-v8`) no longer intercepts POST or cross-origin requests, and caches `voice.js` and `layouts.json`
+- `[2026-10-25]` - Tab buttons shrink on narrow screens so the five tabs fit at 360 px
+- `[2026-10-25]` - Test server binds to `127.0.0.1` and honours `TEST_PORT`
+
+### Fixed
+- `[2026-10-25]` - `tools/INSTALL.md` and README project structure no longer describe `boot.py` as "hold the button at boot" (replaced by the `maintenance.flag` mechanism)
+
 ### Fixed
 - `[2026-07-05]` - Mark all Phase 4 verification tasks complete in TASKS.md
 - `[2026-07-05]` - Fix JIGGLEPATH scaling: deltas now normalised so the largest step equals the Range slider value, preventing sub-pixel (1px) movements from SVG paths

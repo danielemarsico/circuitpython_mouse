@@ -182,9 +182,10 @@ Send the following text commands (terminated with a newline):
 | `CLICK RIGHT`   | Right click                                                 |
 | `CLICK MIDDLE`  | Middle click                                                |
 | `SCROLL n`      | Scroll by n steps (positive=up, negative=down)              |
-| `TYPE text`     | Type text via USB HID keyboard (printable ASCII only, e.g. `TYPE Hello World`) |
-| `LAYOUT EN`     | Switch the keyboard layout to English (US)                  |
-| `LAYOUT IT`     | Switch the keyboard layout to Italian (Windows)             |
+| `TYPE text`     | Type text via USB HID keyboard with the active layout (e.g. `TYPE Hello World`); characters the layout can't type are skipped |
+| `KEY name`      | Press one key by `Keycode` name (e.g. `KEY ENTER`, `KEY SPACE`) |
+| `LAYOUT code`   | Switch the keyboard layout: `US` (or `EN`), `IT`, `UK`, `DE`, `FR`, `ES` (Windows layouts); replies `Layout: <code>` or `Layout <code> not available` |
+| `LAYOUTS`       | Reply with the installed layouts, e.g. `Layouts: US,IT,UK,DE,FR,ES` |
 | `MAINTENANCE`   | Re-enable the `CIRCUITPY` drive on the next boot and reset (see [Hiding the USB Drive](#hiding-the-usb-drive-hid-only-mode)) |
 | `CIPHER <b64>`  | Decrypt an AES-128-CTR payload and type the result (see [Cipher](#cipher)) |
 
@@ -225,7 +226,8 @@ Hosted on GitHub Pages: [danielemarsico.github.io/circuitpython_mouse](https://d
 - Move controls: X/Y number inputs and an arrow pad
 - **Type Text** — send text to be typed via the USB HID keyboard on the connected PC
 - **Cipher Text** — encrypt and send sensitive text using AES-128-CTR; the device decrypts and types it
-- **Keyboard Layout** (Settings tab) — select English (US) or Italian; saved in `localStorage` and sent to the device on Save. The layout must match the OS keyboard layout of the machine the dongle is plugged into
+- **Speech to Keyboard** (Voice tab) — dictate on the phone and the text is typed on the PC (see [Speech to Keyboard](#speech-to-keyboard))
+- **Keyboard Layout** (Settings tab) — US, Italian, UK, German, French or Spanish (the list comes from the dongle); saved in `localStorage`, sent on Save and on every connect. The layout must match the OS keyboard layout of the machine the dongle is plugged into. **Layout test** types a sample string so you can check
 - Custom command text box — type any raw command and press Send or Enter
 - Live log showing sent commands and replies from the device
 - Installable on Android as a home screen app (PWA)
@@ -233,10 +235,10 @@ Hosted on GitHub Pages: [danielemarsico.github.io/circuitpython_mouse](https://d
 
 ### Tab Layouts
 
-The app has a tab bar with four tabs:
+The app has a tab bar with five tabs:
 
 ```
-[ Mouse ]  [ Cipher ]  [ Trackpad ]  [ Settings ]
+[ Mouse ]  [ Cipher ]  [ Trackpad ]  [ Voice ]  [ ⚙ Settings ]
 ```
 
 #### Mouse Tab
@@ -313,6 +315,27 @@ Finger-trackpad experience. Tap to click; drag to move. Draw Mode holds the mous
 └──────────────────────────────────┘
 ```
 
+#### Voice Tab
+
+Speech to Keyboard: dictate, check the text, type it on the PC.
+
+```
+┌──────────────────────────────────┐
+│  [ Auto ] [ Italiano ] [ English ]│  ← Speech language (not the PC layout)
+│  [  Hold to talk · tap to toggle ]│  ← Hold = record while pressed; tap = start/stop
+│  ▬▬▬▬▬▬▬▬▬                       │  ← Level meter; recording stops at 60 s
+│  recording 0:07                  │
+├──────────────────────────────────┤
+│  Transcript                      │
+│  ┌────────────────────────────┐  │
+│  │ editable text…             │  │
+│  └────────────────────────────┘  │
+│  [ Type it ] [ ↵ Enter ] [ Clear ]│
+│  [ Use the raw transcript ]      │  ← Only after an agent cleanup changed it
+│  ☐ Type automatically            │
+└──────────────────────────────────┘
+```
+
 #### Settings Tab
 
 Persists configuration to `localStorage` and applies it to the device on Save.
@@ -320,12 +343,19 @@ Persists configuration to `localStorage` and applies it to the device on Save.
 ```
 ┌──────────────────────────────────┐
 │  Keyboard Layout                 │
-│  Layout: [ QWERTY / IT ▾ ]       │  ← Sent as LAYOUT EN or LAYOUT IT
+│  Layout: [ English (US) ▾ ]      │  ← Sent as LAYOUT EN / IT / UK / DE / FR / ES
+│  [ Layout test ]                 │  ← Types àèéìòù ç £ € @ # [ ] { } " ' ~ `
 ├──────────────────────────────────┤
 │  Pre-shared Key                  │
 │  ┌────────────────────────────┐  │
 │  │ ••••••••                   │  │  ← Password input, stored in localStorage
 │  └────────────────────────────┘  │
+├──────────────────────────────────┤
+│  Speech to Keyboard              │
+│  Engine: [ DuDu worker ▾ ]       │  ← or browser speech recognition
+│  Worker URL / API key            │
+│  ☐ Agent cleanup  ☐ Trailing space│
+│  [ Test connection ]             │  ← GET health check
 ├──────────────────────────────────┤
 │  Jiggle Speed & Range            │
 │  Speed (s)  ──●──────  2s        │  ← Range 0.5–30 s (jiggle interval)
@@ -344,6 +374,29 @@ Persists configuration to `localStorage` and applies it to the device on Save.
 **Jiggle Path:** draw a shape freehand or upload an SVG `<path>`. **Set Jiggle** downsamples to ≤ 30 delta pairs and sends `JIGGLEPATH dx1,dy1,...` to the device.
 
 ---
+
+### Speech to Keyboard
+
+The Voice tab records from the phone's microphone and sends the audio to the
+[DuDu worker](https://dudu.officinegenerative.com) (`POST /v1/utterance`, Whisper
+speech recognition). The transcript appears in an editable box, and **Type it**
+sends it to the dongle as a series of `TYPE` commands.
+
+- **Setup:** Settings → *Speech to Keyboard* → paste your worker API key → **Save** →
+  **Test connection**. The worker must allow this site's origin (CORS).
+- **Language** (Voice tab) is what you speak. **Keyboard Layout** (Settings) is the PC's
+  layout. They are separate: Italian dictation on a PC set to US English types
+  `perche` for `perché`, because the US layout has no accented letters.
+- **Agent cleanup** (optional) asks the worker to fix punctuation and turn spoken
+  commands such as "virgola" or "a capo" into text and Enter. **Use the raw
+  transcript** brings back the unedited text.
+- **Browser** engine: uses Chrome's built-in speech recognition instead of the worker.
+  You don't need a key, but the audio goes to the browser vendor.
+- Text is split into chunks of 60 bytes or less and paced, so long dictations arrive
+  complete. Characters the layout can't type are replaced (`è`→`e`) or dropped.
+- **Don't dictate passwords.** Use the Cipher tab.
+
+The rules behind this feature are in [RULEBOOK.md](RULEBOOK.md) §5.
 
 ### Requirements
 
@@ -375,6 +428,8 @@ The app is then available at `http://<server-ip>:9090`. Point your reverse proxy
 app/
 ├── index.html           # UI (buttons, inputs, log)
 ├── app.js               # Web Bluetooth + command logic
+├── voice.js             # Speech to Keyboard (Voice tab)
+├── layouts.json         # Typable characters per keyboard layout (generated)
 ├── about.html           # Project description page
 ├── ble-debug.html       # Standalone BLE debug/test page
 ├── manifest.json        # PWA manifest
@@ -385,12 +440,13 @@ app/
 
 tools/
 ├── build_package.py     # Builds dist/circuitpython_mouse-device-<version>.zip
+├── gen_layout_charsets.py # Regenerates app/layouts.json from the layout sources
 ├── install.sh           # Linux/macOS installer for a mounted CIRCUITPY drive
 ├── install.ps1          # Windows (PowerShell) installer
 └── INSTALL.md           # Instructions bundled inside the release zip
 
 device/
-├── boot.py              # USB setup: HID-only unless the button is held at boot
+├── boot.py              # USB setup: HID-only; drive visible for one boot in maintenance mode
 ├── code.py              # Main CircuitPython script
 ├── secret.txt           # Pre-shared password for CIPHER command (copy to CIRCUITPY/)
 ├── firmware/            # Bootloader updater + CircuitPython 10.1.3 (.uf2)
@@ -399,7 +455,7 @@ device/
     ├── adafruit_hid/                # USB HID (mouse + keyboard)
     ├── adafruit_debouncer.mpy       # Button debouncing
     ├── adafruit_ticks.mpy           # Timing utility
-    ├── keyboard_layout_win_it.mpy   # Italian keyboard layout (Windows)
+    ├── keyboard_layout_win_{it,uk,de,fr,es}.mpy  # Windows layouts (Neradoc 20250409)
     └── keycode_win_it.mpy           # Italian keycodes
 ```
 
@@ -419,7 +475,7 @@ Automated browser tests for the web app using [Playwright](https://playwright.de
 test/
 ├── webapp_tests/            # Browser tests for app/
 │   ├── package.json
-│   ├── playwright.config.js # Auto-starts app on :8080, headless Chromium
+│   ├── playwright.config.js # Auto-starts app on 127.0.0.1:8080 (TEST_PORT), headless Chromium
 │   ├── fixtures.js          # Custom Playwright fixture: collects V8 JS coverage
 │   ├── report-coverage.cjs  # Converts V8 coverage → Istanbul text report
 │   ├── mocks/
@@ -429,7 +485,9 @@ test/
 │       ├── controls.spec.js   # 15 tests: START/STOP/TOGGLE, move, click, scroll, type
 │       ├── trackpad.spec.js   #  7 tests: draw mode, right click, tap, press/release
 │       ├── jiggle.spec.js     #  8 tests: sliders, localStorage, JIGGLE, canvas, SVG
-│       └── cipher.spec.js     #  5 tests: encrypt, eye toggle, layout, persistence
+│       ├── cipher.spec.js     #  5 tests: encrypt, eye toggle, layout, persistence
+│       └── voice.spec.js      # 23 tests: text pipeline, WAV, worker requests/errors,
+│                              #           auto-type, settings, layouts (fake microphone)
 └── device_test/             # Placeholder for future CircuitPython tests
 ```
 
@@ -437,7 +495,7 @@ test/
 
 Instead of connecting to a real BLE device, the mock injects a fake Web Bluetooth API stack that simulates a Nordic UART Service device. Every command the app sends (`START`, `MOVE x y`, `CLICK RIGHT`, etc.) is captured in `window.__bluetoothMock.commands`, and tests assert that clicking UI buttons produces the correct BLE payloads.
 
-The app is served locally via Python's `http.server` on port 8080, which Playwright auto-starts and stops.
+The app is served locally via Python's `http.server` on `127.0.0.1:8080`, which Playwright auto-starts and stops. Set `TEST_PORT` to use another port. Voice tests use Chromium's fake microphone and intercept the worker with `page.route()`, so they never reach the network.
 
 ### Running
 
@@ -448,7 +506,7 @@ cd test/webapp_tests
 npm install
 npx playwright install chromium
 
-# Run all 38 tests
+# Run all 61 tests
 npm test
 
 # Run with browser visible
@@ -465,13 +523,11 @@ node report-coverage.cjs      # prints text report
 ```
 
 ```
-Statement coverage: 84.88% (466/549)
-Branch coverage:   100%   (108/108)
-Function coverage:  91.66% (11/12)
-Line coverage:      84.88% (466/549)
+app.js    statements 86.97% (541/622) · branches 100%   (141/141) · functions 94.11% (16/17)
+voice.js  statements 92.6%  (426/460) · branches 98.57% (138/140) · functions 96.29% (26/27)
 ```
 
-**Uncovered code** (83 lines): the Password Deriver (requires network fetch), Copy-to-clipboard (not available in headless), keyboard Enter key shortcuts, and trackpad `pointermove` with real movement deltas (synthetic events carry `movementX/Y = 0`). These are expected gaps for a headless test suite without network or clipboard infrastructure.
+**Uncovered code** (83 lines): the Password Deriver (requires network fetch), Copy-to-clipboard (not available in headless), keyboard Enter key shortcuts, and trackpad `pointermove` with real movement deltas (synthetic events carry `movementX/Y = 0`). In `voice.js` the browser speech engine is not covered, because headless Chromium has no speech recognition service. These are expected gaps for a headless test suite without network or clipboard infrastructure.
 
 ---
 

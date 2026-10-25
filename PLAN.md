@@ -1,379 +1,269 @@
-# Feature Plan: Trackpad, Draw Mode, Jiggle Settings, SVG Jiggle Path
+# Feature Plan: Speech-to-Keyboard (v1.1)
+
+> The previous plan (Trackpad, Draw Mode, Jiggle Settings, SVG Jiggle Path) is
+> complete. Its tasks are archived at the bottom of `TASKS.md`, and the full
+> plan text is in git history (`git show 23b1c50:PLAN.md`).
+> Rules this plan must respect are in `RULEBOOK.md` §5.
 
 ## Context
-The BLE Mouse Controller app currently only has discrete directional buttons for movement and one-shot click commands. Users want a finger-trackpad experience, the ability to draw in apps like Paint (hold-click while moving), configurable jiggler parameters, and a custom cursor path for the jiggler defined by freehand drawing or SVG upload.
+
+Users want to dictate on the phone and have the words typed on the PC through
+the dongle. A speech service already exists: **dudu-worker**
+(`https://dudu.officinegenerative.com`, `POST /v1/utterance`,
+`../dudu-worker/ASSISTANT_PROTOCOL.md` Part A), which transcribes with Whisper
+large-v3-turbo on Workers AI.
 
 ---
 
-## Overview of Changes
+## 1. Feasibility assessment
 
-| Area | Files |
-|------|-------|
-| Device firmware | `device/code.py` |
-| Web UI | `app/index.html` |
-| Web logic | `app/app.js` |
+**Verdict: feasible, almost entirely in the web app. One small server change
+(CORS) is needed. The firmware needs no change.**
 
----
+| Question | Finding |
+|---|---|
+| Is a new "send to keyboard" tool needed? | **No.** The firmware already has `TYPE <text>` (layout-aware EN/IT, case preserved) and `KEY <KEYCODE>`. The "tool" is a web-app function that turns a transcript into a paced sequence of `TYPE`/`KEY` commands. |
+| Can the browser record audio? | Yes. `getUserMedia` + `MediaRecorder` work in Chrome over HTTPS (GitHub Pages) and on `localhost`. Chrome is already required for Web Bluetooth. |
+| Can the browser produce the WAV the worker expects? | Yes. Decode with `decodeAudioData`, resample with `OfflineAudioContext(1, n, 16000)`, then write a 44-byte RIFF header + s16le. The worker's own `/tryit` page does exactly this (`pages/tryit.html`, `wavOf()`), so the code can be ported. |
+| Does the worker return dictation-quality text? | Yes, in **transcribe mode**. When `X-Tembed-Protocol` is absent, `handleUtterance` skips the agent and the 200-character clip, and returns `{protocol:1, text:<full transcript>}`. With the header it would return an agent answer, which is wrong for dictation. |
+| Can the browser call the worker? | **Not yet.** `/v1/utterance` sends no `Access-Control-Allow-Origin` and does not answer `OPTIONS`. The `Authorization` header forces a preflight, so a call from `https://danielemarsico.github.io` is blocked. **This is the only server change.** |
+| Can the BLE link carry long text? | Yes, if it is chunked. The device's UART RX buffer is 64 bytes and `layout.write` blocks while typing, so a 300-character transcript sent as one line would overflow. Split into ≤ 60-byte lines and pace them (§4). |
+| Edge cases in the firmware | (a) `cmd.strip()` drops spaces at the edges of a chunk. (b) `layout.write` raises `ValueError` on the first character the layout can't type, after typing the characters before it, so the rest of the text is lost. Both are handled in the web app (§4). Optional firmware hardening is in §6. |
+| Service worker | It currently tries `cache.put()` on every fetch, including the POST to the worker, which throws because the Cache API refuses non-GET requests. It must bypass non-GET and cross-origin requests. |
+| Latency | One full round trip after you release the mic: upload (~32 KB/s of audio) + Whisper, typically 1–3 s for a 10 s phrase. That's acceptable for push-to-talk. Streaming isn't needed. |
+| Cost/quota | Each request counts against the key's daily audio quota on the worker. A `429` with `Retry-After` is shown to the user. |
 
-## 1. New Device Commands (`device/code.py`)
+### Alternatives considered
+- **Web Speech API only** (`webkitSpeechRecognition`): no server, live interim
+  text. But audio goes to the browser vendor, it needs a network connection
+  anyway, and it is uneven on some Android builds. **Kept as an optional
+  fallback engine**, not the default.
+- **Same-origin proxy instead of CORS**: `app/nginx.conf` could proxy
+  `/v1/utterance` to the worker. That works for the Docker self-host only, not
+  GitHub Pages. Documented as an alternative.
+- **Agent mode for voice commands** (`X-Tembed-Protocol` + actions): the
+  action allowlist is T-Embed-specific. Out of scope.
 
-Add these four commands to `handle_command()`:
+### Can the worker's agent format the text for the keyboard?
+**Partly. A prompt alone is not enough.** Assistant turns are hard-clipped to
+200 characters (`clipReply`), and they are answers, not transcripts. So the
+worker gets a dedicated **dictation mode** (`X-Tembed-Mode: dictation`, handed
+off to the dudu-worker repo, §3). It runs a cleanup prompt over the transcript
+and is modeled on the watch's `task_cleanup.txt` / `agentTaskEnrich`.
 
-### `PRESS [LEFT|RIGHT|MIDDLE]`
-Holds a mouse button down without releasing.
-```python
-elif verb == "PRESS":
-    btn = parts[1].upper() if len(parts) > 1 else "LEFT"
-    if btn == "RIGHT":   m.press(Mouse.RIGHT_BUTTON)
-    elif btn == "MIDDLE": m.press(Mouse.MIDDLE_BUTTON)
-    else:                 m.press(Mouse.LEFT_BUTTON)
-```
+| Concern | Who handles it |
+|---|---|
+| Punctuation, casing, filler words, spoken punctuation/commands ("virgola", "a capo") → text and `\n` | **worker agent** (dictation mode), same language, never translated |
+| Which characters the PC's layout can type | **web app**: only the app knows the selected host layout |
+| Chunking, pacing, `\n` → `KEY ENTER`, trailing space | **web app** |
+| Fallback when the agent fails or no agent is configured | worker returns the raw transcript |
 
-### `RELEASE [LEFT|RIGHT|MIDDLE]`
-Releases a held mouse button.
-```python
-elif verb == "RELEASE":
-    btn = parts[1].upper() if len(parts) > 1 else "LEFT"
-    if btn == "RIGHT":   m.release(Mouse.RIGHT_BUTTON)
-    elif btn == "MIDDLE": m.release(Mouse.MIDDLE_BUTTON)
-    else:                 m.release(Mouse.LEFT_BUTTON)
-```
-
-### `JIGGLE speed amplitude`
-Updates the jiggle interval and move magnitude at runtime.
-- `speed`: float seconds (e.g. `2.0`)
-- `amplitude`: int pixels (e.g. `5`)
-```python
-elif verb == "JIGGLE" and len(parts) >= 3:
-    try:
-        JIGGLE_INTERVAL = float(parts[1])
-        amp = int(parts[2])
-        JIGGLE_MOVES = [(amp,0,0),(0,amp,0),(-amp,0,0),(0,-amp,0)]
-    except ValueError:
-        pass
-```
-> Note: `JIGGLE_INTERVAL` and `JIGGLE_MOVES` must be declared `global` inside `handle_command`.
-
-### `JIGGLEPATH dx1,dy1,dx2,dy2,...`
-Replaces `JIGGLE_MOVES` with a custom path encoded as a flat comma-separated list.
-Max ~30 points to stay within BLE MTU.
-```python
-elif verb == "JIGGLEPATH" and len(parts) >= 2:
-    try:
-        nums = [int(n) for n in parts[1].split(",")]
-        pairs = [(nums[i], nums[i+1], 0) for i in range(0, len(nums)-1, 2)]
-        if pairs:
-            JIGGLE_MOVES = pairs
-            move_index = 0
-    except (ValueError, IndexError):
-        pass
-```
+The web app also keeps the local spoken-command mapping (§4.4 step 2) for
+the Browser engine and for keys without a dictation agent.
 
 ---
 
-## 2. New "Trackpad" Tab (`app/index.html`)
+## 2. Overview of changes
 
-Add a fourth tab button between Cipher and Settings:
-```html
-<button class="tab-btn" data-tab="trackpad">Trackpad</button>
-```
-
-### Trackpad panel HTML
-```html
-<div id="panel-trackpad" class="tab-panel hidden">
-
-  <!-- Trackpad card -->
-  <div class="card">
-    <h2>Trackpad</h2>
-    <div style="display:flex;gap:0.5rem;margin-bottom:0.75rem;">
-      <button id="btn-draw-mode" class="btn-primary" style="flex:1;">Draw Mode OFF</button>
-      <button class="btn-blue" id="btn-right-click" disabled style="flex:1;">Right Click</button>
-    </div>
-    <div id="trackpad-area"
-         style="width:100%;aspect-ratio:4/3;background:#0d1117;border:1px solid #1e4480;
-                border-radius:10px;cursor:crosshair;touch-action:none;user-select:none;">
-    </div>
-    <div style="margin-top:0.75rem;" class="input-row">
-      <label style="min-width:7rem;font-size:0.8rem;color:#aaa;">Sensitivity</label>
-      <input type="range" id="trackpad-sensitivity" min="1" max="10" value="3"
-             style="flex:1;accent-color:#3b82f6;" />
-      <span id="sensitivity-val" style="min-width:1.5rem;text-align:right;font-size:0.85rem;">3</span>
-    </div>
-  </div>
-
-</div>
-```
-
-### Jiggle Speed & Range card (inside Settings panel)
-Add below the Keyboard Layout card, before the Save button:
-```html
-<div class="card">
-  <h2>Jiggle Speed &amp; Range</h2>
-  <div class="input-row" style="margin-bottom:0.5rem;">
-    <label style="min-width:5rem;font-size:0.8rem;color:#aaa;">Speed (s)</label>
-    <input type="range" id="jiggle-speed" min="0.5" max="30" step="0.5" value="2"
-           style="flex:1;accent-color:#3b82f6;" />
-    <span id="jiggle-speed-val" style="min-width:2.5rem;text-align:right;font-size:0.85rem;">2s</span>
-  </div>
-  <div class="input-row">
-    <label style="min-width:5rem;font-size:0.8rem;color:#aaa;">Range (px)</label>
-    <input type="range" id="jiggle-range" min="1" max="50" step="1" value="2"
-           style="flex:1;accent-color:#3b82f6;" />
-    <span id="jiggle-range-val" style="min-width:2.5rem;text-align:right;font-size:0.85rem;">2px</span>
-  </div>
-</div>
-
-<div class="card">
-  <h2>Jiggle Path</h2>
-  <canvas id="jiggle-canvas" width="300" height="150"
-          style="width:100%;background:#0d1117;border:1px solid #1e4480;
-                 border-radius:8px;cursor:crosshair;touch-action:none;"></canvas>
-  <div style="margin-top:0.5rem;display:flex;gap:0.5rem;flex-wrap:wrap;">
-    <button id="btn-jiggle-clear" class="btn-primary" style="flex:1;">Clear</button>
-    <label class="btn-primary" style="flex:1;display:flex;align-items:center;
-           justify-content:center;cursor:pointer;padding:0.7rem 0.5rem;
-           font-size:0.9rem;font-weight:600;letter-spacing:0.02em;">
-      Load SVG
-      <input type="file" id="jiggle-svg-upload" accept=".svg,image/svg+xml"
-             style="display:none;" />
-    </label>
-    <button id="btn-jiggle-set" class="btn-green" style="flex:1;" disabled>Set Jiggle</button>
-  </div>
-</div>
-```
+| Area | Files | Required |
+|---|---|---|
+| Server (CORS) | `../dudu-worker/worker.js`, `API.md`, `ASSISTANT_PROTOCOL.md` | yes |
+| Web UI | `app/index.html` | yes |
+| Web logic | `app/app.js` (or a new `app/voice.js`) | yes |
+| Service worker | `app/service-worker.js` | yes |
+| Tests | `test/webapp_tests/tests/voice.spec.js`, mocks | yes |
+| Docs | `README.md`, `app/about.html`, `CHANGELOG.md` | yes |
+| Firmware | `device/code.py` | optional (§6) |
 
 ---
 
-## 3. Trackpad Logic (`app/app.js`)
+## 3. Server: dudu-worker CORS for `/v1/utterance` + dictation mode
 
-### Add to `cmdButtons` selector
-Add `#btn-right-click` to the querySelectorAll list so it auto-disables when not connected.
+> **Handed off.** This section is built in the dudu-worker repository by a
+> separate agent. This project only consumes it. Contract summary: CORS
+> allow-list for the app's origin, and an optional `X-Tembed-Mode: dictation`
+> header that returns `{protocol, text, raw}` with the cleaned (unclipped) text
+> in `text` and the Whisper transcript in `raw`.
 
-### Draw mode toggle
-```js
-let drawMode = false;
-const btnDrawMode = document.getElementById('btn-draw-mode');
-btnDrawMode.addEventListener('click', () => {
-  drawMode = !drawMode;
-  btnDrawMode.textContent = drawMode ? 'Draw Mode ON' : 'Draw Mode OFF';
-  btnDrawMode.className = drawMode ? 'btn-green' : 'btn-primary';
-});
-```
-
-### Right-click button
-```js
-document.getElementById('btn-right-click').addEventListener('click', () => sendCommand('CLICK RIGHT'));
-```
-
-### Sensitivity display
-```js
-const sensitivitySlider = document.getElementById('trackpad-sensitivity');
-const sensitivityVal    = document.getElementById('sensitivity-val');
-sensitivitySlider.addEventListener('input', () => {
-  sensitivityVal.textContent = sensitivitySlider.value;
-});
-```
-
-### Trackpad pointer events
-Use `pointermove` with `getCoalescedEvents()` for smooth tracking. Throttle sends to max one per 40ms (25 Hz) to avoid BLE congestion.
-
-```js
-const trackpad = document.getElementById('trackpad-area');
-let lastSendTime = 0;
-let tpStartTime, tpMoved;
-
-trackpad.addEventListener('pointerdown', e => {
-  trackpad.setPointerCapture(e.pointerId);
-  tpStartTime = Date.now(); tpMoved = false;
-  if (drawMode) sendCommand('PRESS LEFT');
-  e.preventDefault();
-});
-
-trackpad.addEventListener('pointermove', e => {
-  const events = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
-  let totalDx = 0, totalDy = 0;
-  for (const ce of events) { totalDx += ce.movementX; totalDy += ce.movementY; }
-  const sens = parseInt(sensitivitySlider.value);
-  const dx = Math.round(totalDx * sens);
-  const dy = Math.round(totalDy * sens);
-  if (dx !== 0 || dy !== 0) {
-    tpMoved = true;
-    const now = Date.now();
-    if (now - lastSendTime >= 40) {
-      sendCommand(`MOVE ${dx} ${dy}`);
-      lastSendTime = now;
-    }
-  }
-  e.preventDefault();
-});
-
-trackpad.addEventListener('pointerup', e => {
-  if (drawMode) {
-    sendCommand('RELEASE LEFT');
-  } else if (!tpMoved && Date.now() - tpStartTime < 200) {
-    sendCommand('CLICK LEFT');  // tap = left click
-  }
-  e.preventDefault();
-});
-```
+- New env var `CORS_ORIGINS` (comma-separated allow-list), e.g.
+  `https://danielemarsico.github.io,http://localhost:8080`.
+- `OPTIONS /v1/utterance` → `204` with:
+  - `Access-Control-Allow-Origin: <origin, if allow-listed>`
+  - `Access-Control-Allow-Methods: GET, POST, OPTIONS`
+  - `Access-Control-Allow-Headers: Authorization, Content-Type, X-Tembed-Locale, X-Tembed-Session, X-Tembed-Device-Id, X-Tembed-Mode`
+  - `Access-Control-Max-Age: 600`, `Vary: Origin`
+- Add `Access-Control-Allow-Origin` + `Vary: Origin` +
+  `Access-Control-Expose-Headers: Retry-After` to **every** response on the
+  route, including `401`/`429`/`500` errors. Without this, the browser hides
+  the error body.
+- Origins that are not allow-listed get no CORS headers. The browser then
+  blocks the call, so a key alone is no longer usable from an arbitrary site.
+- Document *transcribe mode* (no `X-Tembed-Protocol` → raw, unclipped
+  transcript, no agent, no speech) as a supported client mode in `API.md` and
+  `ASSISTANT_PROTOCOL.md` §2.
+- Tests in the worker repo: preflight allowed/denied, CORS headers on
+  200/401/429.
 
 ---
 
-## 4. Jiggle Settings Logic (`app/app.js`)
+## 4. Web app
 
-### Sliders with live display
+### 4.1 UI (`app/index.html`)
+- New tab **Voice** (between Trackpad and Settings), panel `#panel-voice`:
+  - Big mic button `#btn-mic`: hold to talk (pointerdown/up). Tapping it
+    toggles recording on and off. It shows a timer and a level meter, and stops
+    on its own at 60 s.
+  - Status line: `idle · recording 0:07 · transcribing… · error message`.
+  - `<textarea id="voice-text">`: the editable transcript.
+  - Buttons: `#btn-voice-type` (Type it), `#btn-voice-enter` (KEY ENTER),
+    `#btn-voice-clear`. `Type it` / `Enter` are in `cmdButtons`, so they are
+    disabled while disconnected.
+  - Toggle `#voice-autotype`: type straight away when the transcript arrives.
+- Settings card **Speech to Keyboard**: worker URL (default
+  `https://dudu.officinegenerative.com/v1/utterance`), API key (password field
+  with an eye toggle), language (`auto`/`it`/`en`), engine
+  (`worker`/`browser`), trailing space toggle, and a **Test connection** button
+  (`GET` health → shows `name`, or "key rejected" on 401). Saved by the
+  existing Save button.
+
+### 4.2 Recording → WAV
 ```js
-const jiggleSpeedSlider = document.getElementById('jiggle-speed');
-const jiggleSpeedVal    = document.getElementById('jiggle-speed-val');
-const jiggleRangeSlider = document.getElementById('jiggle-range');
-const jiggleRangeVal    = document.getElementById('jiggle-range-val');
-
-jiggleSpeedSlider.addEventListener('input', () => {
-  jiggleSpeedVal.textContent = jiggleSpeedSlider.value + 's';
-});
-jiggleRangeSlider.addEventListener('input', () => {
-  jiggleRangeVal.textContent = jiggleRangeSlider.value + 'px';
-});
+const stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true } });
+const rec = new MediaRecorder(stream);            // webm/opus in Chrome
+// on stop: Blob → arrayBuffer → AudioContext.decodeAudioData
+const off = new OfflineAudioContext(1, Math.ceil(buf.duration * 16000), 16000);
+// source → destination, startRendering() → Float32 → s16le → RIFF header (wavOf)
 ```
+Stop the tracks after each take so the mic indicator turns off.
 
-### Load from localStorage on init
+### 4.3 Transcription
 ```js
-jiggleSpeedSlider.value = localStorage.getItem('jiggleSpeed') ?? '2';
-jiggleSpeedVal.textContent = jiggleSpeedSlider.value + 's';
-jiggleRangeSlider.value = localStorage.getItem('jiggleRange') ?? '2';
-jiggleRangeVal.textContent = jiggleRangeSlider.value + 'px';
-```
-
-### Persist and send on Save (add to existing `btnSaveSettings` handler)
-```js
-localStorage.setItem('jiggleSpeed', jiggleSpeedSlider.value);
-localStorage.setItem('jiggleRange', jiggleRangeSlider.value);
-if (rxCharacteristic) {
-  sendCommand(`JIGGLE ${jiggleSpeedSlider.value} ${jiggleRangeSlider.value}`);
+async function transcribe(wav) {
+  const headers = { 'Content-Type': 'audio/wav', 'X-Tembed-Device-Id': 'ble-mouse-web' };
+  if (apiKey) headers.Authorization = 'Bearer ' + apiKey;
+  if (lang !== 'auto') headers['X-Tembed-Locale'] = lang === 'it' ? 'it-IT' : 'en-US';
+  if (cleanup) headers['X-Tembed-Mode'] = 'dictation';   // agent cleanup; ignored by an older worker
+  // NO X-Tembed-Protocol → never an assistant turn
+  const r = await fetch(workerUrl, { method: 'POST', headers, body: wav });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error?.message || ('HTTP ' + r.status));
+  return j.text || '';
 }
 ```
+Browser engine: `webkitSpeechRecognition` with `lang`, `interimResults: true`.
+Interim text is shown in the textarea, and the final result goes through the
+same pipeline.
+
+### 4.4 Typing pipeline (`typeText(text)`)
+1. `normalize('NFC')`, trim, collapse runs of whitespace into one space.
+2. *(phase 2)* Local spoken commands, matched at word boundaries:
+   `a capo`/`new line` → `KEY ENTER`, `invio`/`enter` → `KEY ENTER`,
+   `tab` → `KEY TAB`. Off by default.
+3. `sanitizeForLayout(text, layout)`:
+   - Map `‘’`→`'`, `“”`→`"`, `–—`→`-`, `…`→`...`, NBSP→space.
+   - EN: NFD, drop combining marks, keep `[\x20-\x7E]`.
+   - IT: keep `[\x20-\x7E]` + IT set (`àèéìòùç°§£€` and others, to be
+     confirmed on the device). For anything else, strip the diacritic, then
+     drop it if it is still untypable.
+4. `chunkForType(text, 60)`: split at spaces so each `'TYPE ' + chunk + '\n'`
+   is ≤ 60 UTF-8 bytes. A chunk boundary falls *before* a space, so each later
+   chunk starts with `' word…'`. The device's `strip()` only touches the line
+   ends, and `cmd[5:]` keeps that leading space. A single word longer than the
+   limit is hard-split.
+5. Send through `sendCommand('TYPE …')` with pacing: `await sleep(50 + 15 *
+   chunk.length)` between chunks. Do this in an async loop that the user can
+   cancel (Clear while typing stops it).
+6. If trailing space is on → `KEY SPACE`.
+
+`sanitizeForLayout` and `chunkForType` are pure functions exposed on `window`
+for tests.
+
+### 4.5 Languages and keyboard layouts
+Two **independent** settings:
+
+| Setting | Values | Drives |
+|---|---|---|
+| Speech language | `auto` · `it` · `en` (quick IT/EN switch on the Voice tab) | `X-Tembed-Locale`, Web Speech `lang` |
+| Host keyboard layout | what is installed on the dongle: `US`, `IT` today; `UK`, `DE`, `FR`, `ES`, `MAC_IT`, … later | `LAYOUT xx` on the dongle + the app's charset filter |
+
+The layout must match the **PC's OS keyboard setting**, not the spoken
+language. HID sends key positions and the host maps them to characters, so
+the dongle cannot detect the layout.
+
+- **Firmware**: replace the hard-coded EN/IT branch with a registry
+  `{code: module}` loaded lazily with `__import__` (only the active layout
+  takes RAM). Layouts come from the community *Circuitpython_Keyboard_Layouts*
+  bundle (`keyboard_layout_win_xx`, `keyboard_layout_mac_xx`, matching
+  `keycode_*`). New `LAYOUTS` command replies with the installed codes
+  (`Layouts: US,IT`). `LAYOUT xx` still replies `Layout: xx` / `… not
+  available`. `EN` is kept as an alias of `US`.
+- **App**: the layout dropdown is filled from `LAYOUTS` on connect, with a
+  fallback of US/IT for old firmware. A per-layout charset table
+  (`app/layouts.json`) is generated at build time by
+  `tools/gen_layout_charsets.py` from each layout's `ASCII_TO_KEYCODE` +
+  `HIGHER_ASCII`/`COMBINED_KEYS` tables. `sanitizeForLayout` uses it, so
+  adding a layout needs no hand-written list.
+- **Layout test** button in Settings: types `àèéìòù @#[]{}"'€` so you can check
+  the setting matches the PC.
+- Matrix to verify: dictated IT/EN × host layout US/IT (Windows), plus Mac IT
+  when it is added.
+- *Later*: a fallback for characters the layout can't type, using a host-OS
+  input method (Windows Alt+numpad cp1252 codes, Linux Ctrl+Shift+U hex). It
+  needs a "Host OS" setting and a firmware `UNICODE` command.
+
+### 4.6 Service worker (`app/service-worker.js`)
+```js
+self.addEventListener('fetch', e => {
+  const url = new URL(e.request.url);
+  if (e.request.method !== 'GET' || url.origin !== self.location.origin) return; // bypass
+  …existing network-first…
+});
+```
+Bump `CACHE` to `ble-mouse-v8`.
 
 ---
 
-## 5. Jiggle Path Canvas + SVG Upload (`app/app.js`)
-
-### Canvas freehand drawing
-```js
-const jiggleCanvas = document.getElementById('jiggle-canvas');
-const jCtx = jiggleCanvas.getContext('2d');
-let jigglePath = [];
-let jDrawing = false;
-
-jiggleCanvas.addEventListener('pointerdown', e => {
-  jDrawing = true; jigglePath = [];
-  jCtx.clearRect(0, 0, jiggleCanvas.width, jiggleCanvas.height);
-  jCtx.beginPath();
-  const r = jiggleCanvas.getBoundingClientRect();
-  const sx = jiggleCanvas.width / r.width, sy = jiggleCanvas.height / r.height;
-  jCtx.moveTo((e.clientX - r.left) * sx, (e.clientY - r.top) * sy);
-  jigglePath.push({ x: (e.clientX - r.left) * sx, y: (e.clientY - r.top) * sy });
-  e.preventDefault();
-});
-
-jiggleCanvas.addEventListener('pointermove', e => {
-  if (!jDrawing) return;
-  const r = jiggleCanvas.getBoundingClientRect();
-  const sx = jiggleCanvas.width / r.width, sy = jiggleCanvas.height / r.height;
-  const x = (e.clientX - r.left) * sx, y = (e.clientY - r.top) * sy;
-  jCtx.lineTo(x, y);
-  jCtx.strokeStyle = '#3b82f6'; jCtx.lineWidth = 2; jCtx.stroke();
-  jigglePath.push({ x, y });
-  e.preventDefault();
-});
-
-jiggleCanvas.addEventListener('pointerup', () => {
-  jDrawing = false;
-  document.getElementById('btn-jiggle-set').disabled = jigglePath.length < 2;
-});
-```
-
-### SVG upload + preview
-```js
-document.getElementById('jiggle-svg-upload').addEventListener('change', e => {
-  const file = e.target.files[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = evt => {
-    const parser = new DOMParser();
-    const svgDoc = parser.parseFromString(evt.target.result, 'image/svg+xml');
-    const pathEl = svgDoc.querySelector('path');
-    if (!pathEl) { addLog('! No <path> found in SVG', '#f87171'); return; }
-    const pts = sampleSvgPath(pathEl, 30);
-    if (pts.length < 2) { addLog('! SVG path too short', '#f87171'); return; }
-    jCtx.clearRect(0, 0, jiggleCanvas.width, jiggleCanvas.height);
-    jCtx.beginPath();
-    pts.forEach((p, i) => i === 0 ? jCtx.moveTo(p.x, p.y) : jCtx.lineTo(p.x, p.y));
-    jCtx.strokeStyle = '#3b82f6'; jCtx.lineWidth = 2; jCtx.stroke();
-    jigglePath = pts;
-    document.getElementById('btn-jiggle-set').disabled = false;
-  };
-  reader.readAsText(file);
-});
-```
-
-### SVG path sampling helper (no external library — uses built-in browser API)
-```js
-function sampleSvgPath(pathEl, numPoints) {
-  const total = pathEl.getTotalLength();
-  const pts = [];
-  for (let i = 0; i < numPoints; i++) {
-    const pt = pathEl.getPointAtLength((i / (numPoints - 1)) * total);
-    pts.push({ x: pt.x, y: pt.y });
-  }
-  const minX = Math.min(...pts.map(p => p.x)), maxX = Math.max(...pts.map(p => p.x));
-  const minY = Math.min(...pts.map(p => p.y)), maxY = Math.max(...pts.map(p => p.y));
-  const scaleX = maxX > minX ? (jiggleCanvas.width  - 20) / (maxX - minX) : 1;
-  const scaleY = maxY > minY ? (jiggleCanvas.height - 20) / (maxY - minY) : 1;
-  return pts.map(p => ({ x: (p.x - minX) * scaleX + 10, y: (p.y - minY) * scaleY + 10 }));
-}
-```
-
-### Clear button
-```js
-document.getElementById('btn-jiggle-clear').addEventListener('click', () => {
-  jCtx.clearRect(0, 0, jiggleCanvas.width, jiggleCanvas.height);
-  jigglePath = [];
-  document.getElementById('btn-jiggle-set').disabled = true;
-});
-```
-
-### "Set Jiggle" — downsample, convert to deltas, send
-```js
-document.getElementById('btn-jiggle-set').addEventListener('click', () => {
-  if (jigglePath.length < 2) return;
-  const step = Math.ceil(jigglePath.length / 30);
-  const sampled = jigglePath.filter((_, i) => i % step === 0);
-  const scale = 20 / Math.max(jiggleCanvas.width, jiggleCanvas.height);
-  const nums = [];
-  for (let i = 1; i < sampled.length; i++) {
-    nums.push(Math.round((sampled[i].x - sampled[i-1].x) * scale));
-    nums.push(Math.round((sampled[i].y - sampled[i-1].y) * scale));
-  }
-  sendCommand('JIGGLEPATH ' + nums.join(','));
-});
-```
+## 5. Tests (`test/webapp_tests/`)
+- Mocks: `getUserMedia`/`MediaRecorder`/`AudioContext` (return a short
+  synthetic buffer), and `page.route()` for the worker URL (200, 401, 429,
+  500 with error body).
+- Cases: tab renders and buttons are disabled while disconnected; record →
+  transcript appears; auto-type sends the expected `TYPE` lines; request has no
+  `X-Tembed-Protocol` and has the Bearer key; error message shown;
+  `sanitizeForLayout` (EN/IT) and `chunkForType` (≤ 60 bytes, spaces kept,
+  long word split); settings persist; Test connection.
 
 ---
 
-## Implementation Order
-
-1. **`device/code.py`** — add `PRESS`, `RELEASE`, `JIGGLE`, `JIGGLEPATH` to `handle_command()`; declare `JIGGLE_INTERVAL` and `JIGGLE_MOVES` as globals inside that function.
-2. **`app/index.html`** — add "Trackpad" tab button + panel; add Jiggle Speed/Range and Jiggle Path cards to Settings panel.
-3. **`app/app.js`** — wire up draw mode, trackpad pointer events, right-click button, jiggle slider persistence, jiggle canvas drawing, SVG upload, and "Set Jiggle" sender.
+## 6. Optional firmware hardening (`device/code.py`, later)
+- **Per-character fallback in `TYPE`**: when `layout.write` fails, type
+  character by character and skip the ones it can't type, so one bad character
+  doesn't lose the rest. Same for `CIPHER`.
+- **Flow control**: reply `OK\n` on TX after a `TYPE` finishes. The app could
+  then wait for the ack instead of timing the pacing, which is more robust on
+  slow hosts.
+- **Bigger RX buffer**: build `UARTService` with a larger `buffer_size` if the
+  library allows it, so chunks can be longer.
 
 ---
 
-## Verification
+## 7. Implementation order
+1. dudu-worker CORS (+ dictation mode) — handed off to the dudu-worker repo; unblocks everything.
+2. Service worker bypass.
+3. Pure helpers `sanitizeForLayout`, `chunkForType`, `typeText` + tests.
+4. Recording → WAV → transcribe, Settings card, Test connection.
+5. Voice tab UI, auto-type.
+6. Layout registry (firmware `LAYOUTS`), `layouts.json` generator, layout test.
+7. Browser engine fallback.
+8. README/about docs, changelog.
+9. Phase 2: local spoken commands, Unicode fallback, optional firmware hardening.
 
-1. Flash updated `code.py` to device; open serial console → confirm `PRESS LEFT` / `RELEASE LEFT` hold/release in Paint.
-2. Open Paint → connect app → Trackpad tab → Draw Mode ON → drag finger → verify stroke appears.
-3. Tap trackpad (< 200 ms, < 10 px movement) → verify left click fires without drawing.
-4. Right Click button → verify context menu appears on PC.
-5. Settings → adjust speed/range sliders → Save → verify cursor jiggle speed and amplitude change.
-6. Settings → draw path on canvas → Set Jiggle → verify cursor traces that shape.
-7. Settings → upload a simple SVG → Set Jiggle → verify cursor follows the path.
+## 8. Verification
+1. `curl -i -X OPTIONS https://dudu.officinegenerative.com/v1/utterance -H 'Origin: https://danielemarsico.github.io' -H 'Access-Control-Request-Method: POST' -H 'Access-Control-Request-Headers: authorization,content-type'` → 204 with the allow headers. A foreign origin gets no headers.
+2. Settings → Test connection → shows `dudu`. Then a wrong key → "key rejected".
+3. Open Notepad on the PC, connect, Voice tab, hold the mic and say "ciao, questo è un test di dettatura" (layout IT) → the exact text is typed, accents included.
+4. Same with layout EN → typed as `ciao, questo e un test di dettatura`.
+5. Dictate ~45 s of speech → the whole transcript is typed, with no missing chunks or glued words.
+6. Disconnect the BLE → the transcript stays in the preview, nothing is lost. Reconnect → Type it works.
+7. Browser engine → live interim text, and the final text is typed.
+8. Offline → the app shell still loads, and the mic shows a network error.

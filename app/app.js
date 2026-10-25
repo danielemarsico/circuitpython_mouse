@@ -40,7 +40,7 @@ const btnCustom     = document.getElementById('btn-custom');
 const customInput   = document.getElementById('custom-cmd');
 
 // All buttons that require a BLE connection
-const cmdButtons = document.querySelectorAll('[data-cmd], [data-move], #btn-move, #btn-scroll-up, #btn-scroll-down, #btn-custom, #btn-type, #btn-enter, #btn-cipher, #btn-right-click');
+const cmdButtons = document.querySelectorAll('[data-cmd], [data-move], #btn-move, #btn-scroll-up, #btn-scroll-down, #btn-custom, #btn-type, #btn-enter, #btn-cipher, #btn-right-click, #btn-voice-type, #btn-voice-enter, #btn-layout-test');
 
 // --- Logging ---
 function addLog(msg, color = '#4ade80') {
@@ -80,6 +80,39 @@ function sendCommand(cmd) {
       .then(() => addLog('> ' + cmd.trim()))
       .catch(e => addLog('! ' + e.message, '#f87171'))
   );
+}
+
+// --- Device replies (TX) ---
+// A notification carries at most ~20 bytes, so a reply can arrive in pieces:
+// buffer until '\n' and hand complete lines to the handlers.
+const deviceLineHandlers = [];
+let _rxLineBuffer = '';
+let _rxFlushTimer = null;
+
+function onDeviceLine(fn) { deviceLineHandlers.push(fn); }
+
+function _dispatchDeviceLine(line) {
+  line = line.trim();
+  if (!line) return;
+  addLog('< ' + line, '#93c5fd');
+  deviceLineHandlers.forEach(fn => fn(line));
+}
+
+function handleDeviceData(text) {
+  _rxLineBuffer += text;
+  let nl;
+  while ((nl = _rxLineBuffer.indexOf('\n')) >= 0) {
+    _dispatchDeviceLine(_rxLineBuffer.slice(0, nl));
+    _rxLineBuffer = _rxLineBuffer.slice(nl + 1);
+  }
+  // Older firmware may omit the newline: flush a leftover after a short pause.
+  clearTimeout(_rxFlushTimer);
+  if (_rxLineBuffer) {
+    _rxFlushTimer = setTimeout(() => {
+      _dispatchDeviceLine(_rxLineBuffer);
+      _rxLineBuffer = '';
+    }, 300);
+  }
 }
 
 // --- Connection state ---
@@ -134,8 +167,7 @@ async function connect() {
       const txChar = await service.getCharacteristic(NUS_TX_UUID);
       await txChar.startNotifications();
       txChar.addEventListener('characteristicvaluechanged', e => {
-        const msg = new TextDecoder().decode(e.target.value);
-        addLog('< ' + msg.trim(), '#93c5fd');
+        handleDeviceData(new TextDecoder().decode(e.target.value));
       });
       addLog('— TX notifications enabled', '#888');
     } catch (e) {
@@ -145,6 +177,10 @@ async function connect() {
     setConnected(true);
     btnConnect.disabled = false;
     addLog('— connected to ' + bleDevice.name);
+    // The dongle boots with the US layout: restore the saved one, then ask
+    // which layouts it has installed (firmware without LAYOUTS stays silent).
+    if (keyboardLayoutSelect.value) sendCommand('LAYOUT ' + keyboardLayoutSelect.value);
+    sendCommand('LAYOUTS');
   } catch (e) {
     rxCharacteristic = null;
     setConnected(false);
@@ -276,6 +312,39 @@ const keyboardLayoutSelect  = document.getElementById('keyboard-layout');
 
 keyInput.value = getCipherPassword();
 keyboardLayoutSelect.value = localStorage.getItem(LAYOUT_STORAGE_KEY) ?? 'EN';
+
+// --- Keyboard layouts ---
+// The dropdown value is the code sent with LAYOUT. US is sent as "EN" so that
+// firmware predating the layout registry still understands it.
+const LAYOUT_TEST_TEXT = 'àèéìòù ç £ € @ # [ ] { } " \' ~ `';
+let layoutCharsets = {};   // code -> typable characters, from layouts.json
+
+function layoutCode(value) { return value === 'EN' ? 'US' : value; }
+
+fetch('layouts.json')
+  .then(r => r.json())
+  .then(j => { layoutCharsets = j.layouts; })
+  .catch(() => addLog('! layouts.json not loaded: typing falls back to plain ASCII', '#facc15'));
+
+function typableChars(value = keyboardLayoutSelect.value) {
+  return layoutCharsets[layoutCode(value)]?.chars ?? null;
+}
+
+onDeviceLine(line => {
+  if (!line.startsWith('Layouts:')) return;
+  const codes = line.slice(8).split(',').map(s => s.trim()).filter(Boolean);
+  if (!codes.length) return;
+  const current = keyboardLayoutSelect.value;
+  keyboardLayoutSelect.innerHTML = '';
+  for (const code of codes) {
+    const opt = document.createElement('option');
+    opt.value = code === 'US' ? 'EN' : code;
+    opt.textContent = layoutCharsets[code]?.name ?? code;
+    keyboardLayoutSelect.appendChild(opt);
+  }
+  keyboardLayoutSelect.value = current;
+  if (keyboardLayoutSelect.value !== current) keyboardLayoutSelect.value = 'EN';
+});
 
 btnEyeKey.innerHTML = SVG_EYE_OPEN;
 btnEyeKey.addEventListener('click', () => {

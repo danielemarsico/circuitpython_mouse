@@ -74,8 +74,9 @@
       border-bottom: 2px solid transparent;
       margin-bottom: -1px;
       color: #666;
-      padding: 0.5rem 1.1rem;
+      padding: 0.5rem clamp(0.45rem, 2.6vw, 1.1rem);
       font-size: 0.85rem;
+      white-space: nowrap;
       font-weight: 600;
       cursor: pointer;
       letter-spacing: 0.04em;
@@ -185,6 +186,48 @@
       border-color: #3b82f6;
     }
 
+    /* Voice tab */
+    #btn-mic {
+      width: 100%;
+      padding: 1.4rem 0.5rem;
+      font-size: 1.05rem;
+      background: #1e3a5f;
+      color: #bfdbfe;
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    #btn-mic.recording { background: #7f1d1d; color: #fecaca; }
+    #btn-mic.busy      { background: #713f12; color: #fef08a; }
+    #voice-level {
+      height: 4px;
+      margin-top: 0.5rem;
+      background: #0d1117;
+      border-radius: 2px;
+      overflow: hidden;
+    }
+    #voice-level > div { height: 100%; width: 0%; background: #4ade80; transition: width 0.08s; }
+    #voice-status { font-size: 0.8rem; color: #aaa; margin-top: 0.5rem; min-height: 1.1em; }
+    #voice-status.error { color: #f87171; }
+    textarea, select.field {
+      width: 100%;
+      background: #0f3460;
+      border: 1px solid #1e4480;
+      border-radius: 6px;
+      color: #e0e0e0;
+      padding: 0.55rem 0.6rem;
+      font-size: 0.9rem;
+      font-family: inherit;
+      outline: none;
+    }
+    textarea { resize: vertical; min-height: 6rem; }
+    textarea:focus { border-color: #3b82f6; }
+    .seg { display: flex; gap: 0.4rem; }
+    .seg button { flex: 1; padding: 0.45rem 0.3rem; font-size: 0.8rem; background: #0f3460; color: #e0e0e0; }
+    .seg button.active { background: #3b82f6; color: #fff; }
+    .check-row { display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; margin-top: 0.6rem; }
+    .check-row input { accent-color: #3b82f6; width: 1.05rem; height: 1.05rem; }
+
     #log {
       background: #0d1117;
       border: 1px solid #0f3460;
@@ -222,6 +265,7 @@
     <button class="tab-btn active" data-tab="controls">Controls</button>
     <button class="tab-btn"        data-tab="cipher">Cipher</button>
     <button class="tab-btn"        data-tab="trackpad">Trackpad</button>
+    <button class="tab-btn"        data-tab="voice">Voice</button>
     <button class="tab-btn"        data-tab="settings" style="margin-left:auto;" aria-label="Settings" title="Settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1.1rem;height:1.1rem;display:block;"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg></button>
   </div>
 
@@ -357,6 +401,35 @@
 
   </div><!-- /panel-trackpad -->
 
+  <!-- Voice panel -->
+  <div id="panel-voice" class="tab-panel hidden">
+
+    <div class="card">
+      <h2>Speech to Keyboard</h2>
+      <div class="seg" id="voice-lang" role="group" aria-label="Speech language">
+        <button data-lang="auto">Auto</button>
+        <button data-lang="it">Italiano</button>
+        <button data-lang="en">English</button>
+      </div>
+      <button id="btn-mic" style="margin-top:0.75rem;">Hold to talk · tap to toggle</button>
+      <div id="voice-level"><div></div></div>
+      <p id="voice-status">idle</p>
+    </div>
+
+    <div class="card">
+      <h2>Transcript</h2>
+      <textarea id="voice-text" placeholder="the dictated text appears here — edit it before typing…"></textarea>
+      <div class="btn-grid cols-3" style="margin-top:0.6rem;">
+        <button class="btn-green" id="btn-voice-type"  disabled>Type it</button>
+        <button class="btn-blue"  id="btn-voice-enter" disabled>↵ Enter</button>
+        <button class="btn-red"   id="btn-voice-clear">Clear</button>
+      </div>
+      <button class="btn-primary" id="btn-voice-raw" hidden style="width:100%;margin-top:0.6rem;">Use the raw transcript</button>
+      <label class="check-row"><input type="checkbox" id="voice-autotype" /> Type automatically when the transcript arrives</label>
+    </div>
+
+  </div><!-- /panel-voice -->
+
   <!-- Settings panel -->
   <div id="panel-settings" class="tab-panel hidden">
 
@@ -382,8 +455,35 @@
       <h2>Keyboard Layout</h2>
       <select id="keyboard-layout" style="width:100%;background:#0f3460;border:1px solid #1e4480;border-radius:6px;color:#e0e0e0;padding:0.55rem 0.6rem;font-size:0.9rem;outline:none;">
         <option value="EN">English (US)</option>
-        <option value="IT">Italian</option>
+        <option value="IT">Italiano</option>
+        <option value="UK">English (UK)</option>
+        <option value="DE">Deutsch</option>
+        <option value="FR">Français</option>
+        <option value="ES">Español</option>
       </select>
+      <p class="field-label" style="margin-top:0.5rem;">Must match the PC's keyboard setting, not the language you speak.</p>
+      <button class="btn-blue" id="btn-layout-test" disabled style="width:100%;margin-top:0.5rem;">Layout test (types a sample on the PC)</button>
+    </div>
+
+    <!-- Speech to Keyboard -->
+    <div class="card">
+      <h2>Speech to Keyboard</h2>
+      <label class="field-label" for="voice-engine">Engine</label>
+      <select id="voice-engine" class="field">
+        <option value="worker">DuDu worker (Whisper)</option>
+        <option value="browser">Browser speech recognition</option>
+      </select>
+      <label class="field-label" for="voice-url" style="margin-top:0.75rem;">Worker URL</label>
+      <input type="text" id="voice-url" placeholder="https://dudu.officinegenerative.com/v1/utterance" autocomplete="off" style="width:100%;" />
+      <label class="field-label" for="voice-key" style="margin-top:0.75rem;">API key</label>
+      <div class="input-row">
+        <input type="password" id="voice-key" placeholder="worker API key…" autocomplete="new-password" />
+        <button class="btn-eye" id="btn-eye-voice-key" aria-label="Show / hide API key" title="Show / hide"></button>
+      </div>
+      <label class="check-row"><input type="checkbox" id="voice-cleanup" /> Agent cleanup (punctuation, "a capo" → Enter)</label>
+      <label class="check-row"><input type="checkbox" id="voice-trailing-space" /> Add a space after each dictation</label>
+      <button class="btn-blue" id="btn-voice-test" style="width:100%;margin-top:0.75rem;">Test connection</button>
+      <p id="voice-test-msg" class="field-label" style="margin:0.5rem 0 0;min-height:1.1em;"></p>
     </div>
 
     <div class="card">
@@ -431,6 +531,7 @@
 </main>
 
 <script src="app.js"></script>
+<script src="voice.js"></script>
 <script>
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('service-worker.js');

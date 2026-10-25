@@ -4,7 +4,7 @@ This archive contains everything that belongs on the dongle:
 
 ```
 CIRCUITPY/          # copy the contents of this folder to the drive root
-├── boot.py         # USB setup (HID-only unless the button is held at boot)
+├── boot.py         # USB setup (HID-only; drive visible for one boot in maintenance mode)
 ├── code.py         # main firmware
 └── lib/            # CircuitPython libraries
 secret.txt.example  # rename to secret.txt on the drive and set your password
