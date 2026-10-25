@@ -1,4 +1,13 @@
-# Feature Plan: Speech-to-Keyboard (v1.1)
+# Feature Plans
+
+- **Part 1 — Speech-to-Keyboard (v1.1–1.3)**: implemented, pending hardware verification
+- **Part 2 — App and firmware updates (v1.4)**: planned ([jump](#part-2--feature-plan-app-and-firmware-updates-v14))
+
+Rules for both are in `RULEBOOK.md` (§5 for Part 1, §7 for Part 2).
+
+---
+
+# Part 1 — Feature Plan: Speech-to-Keyboard (v1.1)
 
 > The previous plan (Trackpad, Draw Mode, Jiggle Settings, SVG Jiggle Path) is
 > complete. Its tasks are archived at the bottom of `TASKS.md`, and the full
@@ -267,3 +276,215 @@ Bump `CACHE` to `ble-mouse-v8`.
 6. Disconnect the BLE → the transcript stays in the preview, nothing is lost. Reconnect → Type it works.
 7. Browser engine → live interim text, and the final text is typed.
 8. Offline → the app shell still loads, and the mic shows a network error.
+
+---
+
+# Part 2 — Feature Plan: App and firmware updates (v1.4)
+
+## Context
+
+- The web app is installed as a PWA on the phone. Updating it should never
+  require deleting and reinstalling it.
+- Updating the dongle today takes: maintenance mode (3 s button hold or
+  `MAINTENANCE`) → the `CIRCUITPY` drive appears → run `tools/install.sh` /
+  `install.ps1` → re-plug. The goal is a semi-automatic update: the app tells
+  you an update exists, and one action applies it.
+
+Rules: `RULEBOOK.md` §6–§7.
+
+---
+
+## 1. Feasibility assessment
+
+### 1.1 PWA updates — **feasible, small**
+
+| Finding | Detail |
+|---|---|
+| Reinstalling is not needed today either | The installed PWA loads the same origin. `service-worker.js` is network-first, and Chrome checks the service-worker script on navigation (it bypasses the HTTP cache for it and checks at least every 24 h). |
+| Why updates look stuck | (1) Android resumes the PWA from memory, and a resume is not a navigation, so old code keeps running until the app is closed and relaunched. (2) GitHub Pages sends `cache-control: max-age=600`, and the service worker's `fetch(e.request)` goes through the HTTP cache, so for up to 10 min after a deploy it can still get the old files. (3) There is no visible version, so there's no way to tell. |
+| Manifest changes | Name, icon and colours are updated by Chrome's own WebAPK update check on launch. No reinstall is needed. |
+| Fix | Revalidate with `cache: 'no-cache'` (a cheap 304 when nothing changed), add a deploy-time `version.json`, and show an update banner on `visibilitychange`. |
+
+### 1.2 Dongle updates — options
+
+| | **A. Web Serial updater** | **B. Bluetooth OTA** | C. CircuitPython BLE file transfer |
+|---|---|---|---|
+| Transport | USB serial console (CDC). Still on in HID-only mode, because `boot.py` only calls `storage.disable_usb_drive()` | Nordic UART over BLE, from the phone | CircuitPython's built-in BLE workflow |
+| Where it runs | Desktop Chrome/Edge (Web Serial) on the PC the dongle is plugged into | The phone (PWA) | Phone, with a separate client |
+| Firmware change | **None**: it drives the raw REPL like Thonny / `mpremote` | New OTA commands, auth, rollback in `boot.py` | None, but it would compete with `code.py`'s own use of the BLE radio |
+| Can it write files? | Yes. With the drive hidden, code can `storage.remount("/", readonly=False)`, which `enter_maintenance()` already relies on | Yes, the same remount from `code.py` | Unverified on this board |
+| Maintenance mode | Not needed. It **doesn't work** while in maintenance mode (the host owns the drive, so remount fails), and the updater says so | Not needed | — |
+| Speed | 57 KB payload, seconds | About 60-byte writes: ~20–60 s for a full payload, much less for `code.py` only | — |
+| Works on a broken `code.py` | **Yes**: Ctrl-C interrupts it, so it's also a recovery tool | No | — |
+| Security | Needs physical USB access, the same as today | **Critical**: the BLE link has no pairing, so anyone nearby could install persistent keyboard code. Needs authenticated packages (RULEBOOK §7.4) | — |
+| Effort | Medium: 1–2 days | High: 3–5 days plus hardware testing | Not pursued |
+
+**Verdict:** do the PWA updates first, then the firmware version and manifest
+groundwork, then **Option A**. Option B is optional, comes later, and only
+with authentication, rollback and, ideally, BLE pairing.
+
+---
+
+## 2. PWA updates (`app/`, `.github/workflows/static.yml`)
+
+### 2.1 Revalidation
+```js
+// service-worker.js, same-origin GETs only (RULEBOOK §5.5)
+fetch(e.request, { cache: 'no-cache' })   // ETag → 304 when unchanged
+```
+Bump `CACHE` to `ble-mouse-v9`. Register with
+`navigator.serviceWorker.register('service-worker.js', { updateViaCache: 'none' })`.
+
+### 2.2 Version stamp
+- The deploy step writes `app/version.json`:
+  `{"version": "<git describe or date>", "commit": "<sha>", "built": "<iso>"}`.
+- A local checkout without it shows `dev`.
+- Settings and About show `App <version>`.
+
+### 2.3 Update banner
+- On `visibilitychange` → visible, and at most every 5 min: call
+  `registration.update()` and fetch `version.json` with `cache: 'no-store'`.
+- If the version differs from the one loaded, or a new service worker is
+  `waiting`/`installed`, show a banner: **Update available → Reload**.
+- Reload = `location.reload()`, since the current service worker already calls
+  `skipWaiting()` + `clients.claim()`.
+- Never reload on its own. Hold the banner while recording or typing
+  (RULEBOOK §7.1).
+
+---
+
+## 3. Firmware version and manifest (groundwork for A and B)
+
+### 3.1 Firmware
+- Add `VERSION = "2026.10.25"` to `code.py`, and a `VERSION` command that
+  replies `Version: <VERSION>`.
+- The app sends `VERSION` on connect (next to `LAYOUTS`) and shows it in
+  Settings. Old firmware stays silent and is shown as "unknown (older than
+  1.4)".
+
+### 3.2 Published firmware files
+- New `tools/build_firmware_manifest.py`:
+  - copies `device/boot.py`, `device/code.py` and `device/lib/**` into
+    `app/firmware/` (it never includes `secret.txt`);
+  - writes `app/firmware/manifest.json` with the version and, for each file,
+    its path, size and CRC32;
+  - reads the version from `VERSION` in `code.py`, so there's a single source.
+```json
+{ "version": "2026.10.25", "files": [
+  { "path": "code.py", "size": 12034, "crc32": "9f1c2a7e" },
+  { "path": "lib/keyboard_layout_win_it.mpy", "size": 567, "crc32": "…" } ] }
+```
+- `static.yml` runs it before uploading the Pages artifact. `device.zip`
+  stays for manual installs.
+- The service worker does **not** cache `firmware/` (updaters fetch it with
+  `cache: 'no-store'`).
+- When connected, the app compares the device's `VERSION` with
+  `manifest.version` and shows **Firmware update available**.
+
+---
+
+## 4. Option A — Web Serial updater
+
+### 4.1 UI
+- New **Firmware** card in Settings: device version, latest version, and an
+  **Update over USB** button.
+- The button is shown only when `navigator.serial` exists, i.e. desktop
+  Chrome/Edge. On the phone the card says: *"Open this app in Chrome on the PC
+  the dongle is plugged into."*
+- Progress: a list of files with their state (unchanged / writing / verified),
+  and a final status.
+
+### 4.2 Flow
+1. `navigator.serial.requestPort()`. The user picks the CircuitPython CDC
+   port. Filter on Adafruit/Raytac USB vendor IDs if known; otherwise show all.
+2. `open({ baudRate: 115200 })` (ignored by USB CDC, but required by the API).
+3. Interrupt and enter the raw REPL: send `\x03\x03` (Ctrl-C ×2), wait for
+   `>>>`, then send `\x01` (Ctrl-A) and wait for `raw REPL; CTRL-B to exit\r\n>`.
+4. `exec(code)`: send the code, then `\x04`. Read `OK`, stdout, `\x04`, stderr,
+   `\x04>`. Any stderr is an error.
+5. `storage.remount("/", readonly=False)`. If it fails, show *"The drive is
+   mounted (maintenance mode): unplug and re-plug normally, then retry."*
+6. Ask the device for the size and CRC32 of every manifest file (one snippet
+   that prints JSON). Build the list of files to send: those missing or with a
+   different CRC.
+7. For each file (libraries first, `code.py` last):
+   - `f = open(path + '.new', 'wb')`
+   - send `f.write(binascii.a2b_base64(b'…'))` in ~192-byte base64 chunks,
+     one `exec` each, with backpressure from the `\x04>` prompt;
+   - `f.close()`, read the file back for its CRC32 and compare with the
+     manifest;
+   - swap: `os.remove(path)` (for `code.py`, rename it to `code.bak` instead),
+     then `os.rename(path + '.new', path)`.
+8. `storage.remount("/", readonly=True)`, then `import microcontroller;
+   microcontroller.reset()`. Close the port. The app shows *"Updated to
+   <version>. Reconnect over Bluetooth."*
+9. On any error: remove leftover `.new` files, keep the port open, and offer
+   **Retry**. Until step 7 swaps `code.py` the old firmware is intact, and
+   after it `code.bak` exists.
+
+### 4.3 Notes and risks
+- CircuitPython supports the raw REPL (Thonny uses it). Raw-paste mode
+  (`\x05A\x01`) isn't assumed; plain raw mode with small chunks is enough for
+  57 KB.
+- `binascii.crc32` and `binascii.a2b_base64` exist on CircuitPython nRF52.
+  This must be confirmed on the device as the first task.
+- Linux: the user needs access to `/dev/ttyACM*` (`dialout` group). Document
+  it.
+- The updater code lives in `app/updater.js`, which is loaded lazily from
+  Settings so the phone never downloads it.
+
+---
+
+## 5. Option B — Bluetooth OTA (optional, later)
+
+### 5.1 Commands (lines of 60 bytes or less, RULEBOOK §2 and §7.4)
+| App → device | Device → app |
+|---|---|
+| `OTA NONCE` | `OTA NONCE <16 hex>`, fresh random from `os.urandom` |
+| `OTA BEGIN <path> <size> <crc32>` | `OTA READY` or `OTA ERR <reason>` |
+| `OTA DATA <seq> <base64 ≤ 40 bytes>` | `OTA ACK <seq>` (the app waits for it) |
+| `OTA END <cmac hex>` | `OTA OK` (file verified and swapped) or `OTA ERR …` |
+| `OTA COMMIT` | `OTA REBOOT`, then reset |
+
+### 5.2 Authentication
+- The key is derived from `secret.txt`, the same key the app already holds as
+  its pre-shared key.
+- The tag is AES-CMAC over `nonce ‖ path ‖ size ‖ crc32 ‖ version`.
+- The app computes it with WebCrypto (AES-CBC with a zero IV plus the CMAC
+  subkey steps). The device checks it with `aesio` in ECB mode.
+- No `secret.txt` → OTA is disabled. A wrong tag → the `.new` file is removed.
+
+### 5.3 Rollback (`boot.py`)
+- `OTA COMMIT` writes `pending.flag`.
+- `boot.py`: if `pending.flag` is present and `attempt.flag` is absent, it
+  creates `attempt.flag`, giving the new code one try. If both are present, the
+  previous try failed, so it restores `code.bak` → `code.py` and removes both
+  flags.
+- `code.py`: after its first full main-loop pass (BLE advertising and HID
+  ready), it removes both flags.
+
+### 5.4 Prerequisite
+- BLE pairing/bonding (`ble.start_advertising` with security, or bonding via
+  `_bleio`) should come first. It also closes today's gap, where anyone
+  nearby can send `TYPE`.
+
+---
+
+## 6. Implementation order
+1. PWA: `no-cache` revalidation, `version.json` in deploy, update banner, version in Settings/About. Tests.
+2. Firmware `VERSION` constant and command. The app shows the device version.
+3. `tools/build_firmware_manifest.py` and Pages publishing. "Firmware update available" indicator.
+4. On the device: confirm the raw REPL, `binascii.crc32` and remount in HID-only mode, by hand with a serial terminal.
+5. Option A: `app/updater.js`, Firmware card, Playwright tests with a mocked `navigator.serial` that emulates the raw REPL.
+6. Docs: README / about / INSTALL (USB updater as the recommended path, `dialout` note).
+7. *(Optional)* BLE pairing, then Option B with CMAC and rollback.
+
+## 7. Verification
+1. Deploy a change and keep the PWA open in the background. Bring it to the foreground → the banner appears → Reload → the new version is shown, with no reinstall.
+2. Launch offline → the app shell loads from the cache, and there's no banner or error loop.
+3. Connect with old firmware → "Firmware: unknown (older than 1.4)", update available.
+4. Desktop Chrome, dongle in normal HID-only mode → Update over USB → only changed files are sent → the dongle resets → `VERSION` reports the new version → Layout test still works.
+5. Unplug in the middle of an update → replug → the old firmware runs, or `code.bak` is restored. Rerunning the updater completes it.
+6. Dongle in maintenance mode → the updater shows the "drive is mounted" message.
+7. Phone (no Web Serial) → the Firmware card shows the PC hint, with no button.
+8. Option B only: a wrong key or a replayed nonce is rejected, and a deliberately broken `code.py` is rolled back after one boot.

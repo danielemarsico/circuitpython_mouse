@@ -8,6 +8,7 @@ Format: `[YYYY-MM-DD] - Description`
 ## [Unreleased]
 
 ### Added
+- `[2026-10-25]` - Plan for app and firmware updates (v1.4): `PLAN.md` Part 2 (feasibility of in-place PWA updates, Web Serial updater, authenticated Bluetooth OTA) and `RULEBOOK.md` §6–§7 with update rules and the planned `VERSION` command
 - `[2026-10-25]` - Speech to Keyboard: new Voice tab (`app/voice.js`) records from the microphone, sends 16 kHz mono WAV to the DuDu worker (`POST /v1/utterance`, transcribe mode, optional `X-Tembed-Mode: dictation` agent cleanup) or uses the browser's speech recognition, and types the transcript through paced `TYPE`/`KEY` commands of 60 bytes or less; editable preview, auto-type, raw-transcript undo, IT/EN/auto speech language
 - `[2026-10-25]` - Settings card "Speech to Keyboard": engine, worker URL, API key, agent cleanup, trailing space, Test connection
 - `[2026-10-25]` - Keyboard layouts UK, DE, FR, ES (Windows, Neradoc release 20250409) in `device/lib/`; firmware layout registry with lazy import and a new `LAYOUTS` command; the app fills the layout dropdown from the dongle and adds a Layout test button

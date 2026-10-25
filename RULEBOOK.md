@@ -5,9 +5,9 @@ parts talk to each other, and what every change must respect.
 
 | | |
 |---|---|
-| **Version** | 1.3 (1.0 = shipped features · 1.1–1.3 = Speech-to-Keyboard and keyboard layouts) |
+| **Version** | 1.4 (1.0 = shipped features · 1.1–1.3 = Speech-to-Keyboard and keyboard layouts · 1.4 = app and firmware updates, planned) |
 | **Date** | 2026-10-25 |
-| **Status** | 1.0 current · 1.3 implemented, pending hardware verification (`TASKS.md` Phase S9) |
+| **Status** | 1.0 current · 1.3 implemented, pending hardware verification (`TASKS.md` Phase S9) · 1.4 planned (`PLAN.md` Part 2) |
 | **Authors** | Daniele Marsico and Claude (Anthropic) |
 
 ---
@@ -55,6 +55,7 @@ by `\n`.
 | `LAYOUTS` | replies `Layouts: US,IT,…`, the layouts installed on the dongle |
 | `CIPHER <base64>` | AES-CTR (IV ‖ ciphertext) decrypted with `secret.txt`, then typed |
 | `MAINTENANCE` | writes `maintenance.flag` and resets with the drive visible |
+| `VERSION` *(1.4, planned)* | replies `Version: <firmware version>` (e.g. `Version: 2026.10.25`) |
 
 Rules:
 
@@ -181,7 +182,74 @@ Dictate on the phone and the words are typed on the PC through the dongle.
 - Only same-origin `GET` requests are cached. `POST` and cross-origin requests
   bypass the cache. Bump `CACHE` on every release that changes app assets.
 
-## 6. Project conventions
+## 6. Planned feature: App and firmware updates (v1.4)
+
+Keep the installed app and the dongle current without reinstalling the app
+or running the installer by hand. Design and feasibility: `PLAN.md` Part 2.
+
+- **App updates in place**: the service worker always revalidates with the
+  server. A deploy-time `version.json` is shown in Settings/About, and an
+  "Update available → Reload" banner appears when the app returns to the
+  foreground and finds a newer version. Reinstalling is never needed.
+- **Firmware version**: a `VERSION` constant in `code.py` and the `VERSION`
+  command, so the app can say "firmware update available" on connect.
+- **Firmware manifest**: the Pages deploy publishes `firmware/manifest.json`
+  (version, and path, size and CRC32 for each file) next to the device files.
+- **Web Serial updater (Option A, chosen first)**: desktop Chrome/Edge on the
+  PC the dongle is plugged into. It uses the USB serial console, which stays on
+  in HID-only mode, to interrupt `code.py` and write the files through the raw
+  REPL. It needs no firmware change and no maintenance mode, and it doubles as
+  a recovery tool.
+- **Bluetooth OTA (Option B, later and optional)**: phone-only updates over
+  the Nordic UART link, with authenticated packages and an automatic rollback.
+
+## 7. Rules for updates
+
+### 7.1 App (PWA)
+- **Reinstalling is never part of an update.** Every change ships through the
+  service worker and network revalidation.
+- The service worker fetches same-origin `GET`s with `cache: 'no-cache'`
+  (ETag revalidation). An offline launch still falls back to the cache.
+- `version.json` is generated at deploy time and never hand-edited. The page
+  only offers a reload, and never reloads on its own while a dictation or
+  typing job is in progress.
+
+### 7.2 Firmware versions and packages
+- `VERSION` in `code.py` uses the release date format `YYYY.MM.DD[.n]` and
+  is bumped by every firmware change. It matches `firmware/manifest.json`.
+- The manifest lists every file the installer copies (`boot.py`, `code.py`,
+  `lib/**`) with size and CRC32 (`binascii.crc32`, available in CircuitPython).
+  `secret.txt` is **never** in the manifest and is never written by an updater.
+- Updaters send only the files whose CRC32 differs from what is on the device.
+
+### 7.3 Writing files on the device (both updaters)
+- Write each file to `<name>.new`, read it back and check its size and CRC32,
+  then swap it in. FAT's `os.rename` won't replace an existing file, so the
+  original is removed first (for `code.py`, renamed to `code.bak`). `code.py`
+  is written **last**, so a partial update never leaves new code running
+  against old libraries.
+- Keep `code.bak` (the previous `code.py`) until the new version has started
+  successfully.
+- After the update, a hard reset (`microcontroller.reset()`), never just a soft
+  reload, because `boot.py` only runs on a hard reset.
+- If an update fails partway through, the device must still be recoverable by
+  rerunning the updater over USB serial, and the UF2 bootloader remains the
+  last resort.
+
+### 7.4 Bluetooth OTA (Option B only)
+- **No unauthenticated code installs.** The BLE link has no pairing, so every
+  OTA package is authenticated with a key derived from `secret.txt`: AES-CMAC
+  built on `aesio` ECB, since CircuitPython has no `hmac` on nRF52. The device
+  rejects a package without a valid tag, and OTA is disabled when `secret.txt`
+  is missing.
+- Rollback: `boot.py` restores `code.bak` if the new `code.py` doesn't mark
+  itself healthy (an `ok` flag written after its first full loop) within one
+  boot.
+- OTA commands follow §2: lines of 60 bytes or less, base64 payloads, and a
+  reply for every chunk (the app waits for the acknowledgement, not for a timer).
+- Bluetooth pairing/bonding should come before or together with OTA.
+
+## 8. Project conventions
 - **Changelog first**: every commit/push has a `CHANGELOG.md` entry
   (`[YYYY-MM-DD] - Description`) under `## [Unreleased]`.
 - New app features need Playwright tests in `test/webapp_tests/`, with BLE,
@@ -189,7 +257,7 @@ Dictate on the phone and the words are typed on the PC through the dongle.
 - New BLE commands are documented in §2 of this file and in the README.
 - The firmware stays dependency-light: only libraries in `device/lib/`.
 
-## 7. Revision history
+## 9. Revision history
 
 | Version | Date | Change |
 |---|---|---|
@@ -197,3 +265,4 @@ Dictate on the phone and the words are typed on the PC through the dongle.
 | 1.1 | 2026-10-25 | Speech-to-Keyboard specified (planned): Voice tab, dudu-worker transcribe mode, typing pipeline rules |
 | 1.2 | 2026-10-25 | Worker work handed off to dudu-worker; opt-in agent cleanup (`X-Tembed-Mode: dictation`); speech language vs host layout; layout registry, `LAYOUTS`, generated charsets |
 | 1.3 | 2026-10-25 | Implemented: Voice tab (`app/voice.js`), layout registry + `LAYOUTS` + UK/DE/FR/ES layouts, `app/layouts.json` generator, per-character `TYPE`, TX line reassembly, layout sync on connect, service worker bypass. Pending hardware verification |
+| 1.4 | 2026-10-25 | Planned: in-place app updates (no-cache revalidation, `version.json`, update banner), firmware `VERSION` command and manifest, Web Serial updater (Option A), authenticated Bluetooth OTA with rollback (Option B); rules in §7 |
