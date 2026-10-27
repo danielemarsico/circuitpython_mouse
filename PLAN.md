@@ -1,7 +1,7 @@
 # Feature Plans
 
 - **Part 1 — Speech-to-Keyboard (v1.1–1.3)**: implemented, pending hardware verification
-- **Part 2 — App and firmware updates (v1.4)**: planned ([jump](#part-2--feature-plan-app-and-firmware-updates-v14))
+- **Part 2 — App and firmware updates (v1.4)**: steps 1–3, 5, 6 implemented (RULEBOOK 1.5), pending hardware verification (step 4, §7); Option B not started ([jump](#part-2--feature-plan-app-and-firmware-updates-v14))
 
 Rules for both are in `RULEBOOK.md` (§5 for Part 1, §7 for Part 2).
 

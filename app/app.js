@@ -116,12 +116,17 @@ function handleDeviceData(text) {
 }
 
 // --- Connection state ---
+const connectionHandlers = [];
+
+function onConnectionChange(fn) { connectionHandlers.push(fn); }
+
 function setConnected(connected) {
   statusDot.className = connected ? 'connected' : '';
   statusText.textContent = connected ? 'Connected' : 'Disconnected';
   btnConnect.textContent = connected ? 'Disconnect' : 'Connect';
   btnConnect.className = 'btn-connect' + (connected ? ' connected' : '');
   cmdButtons.forEach(b => b.disabled = !connected);
+  connectionHandlers.forEach(fn => fn(connected));
 }
 
 function setConnecting() {
@@ -178,9 +183,11 @@ async function connect() {
     btnConnect.disabled = false;
     addLog('— connected to ' + bleDevice.name);
     // The dongle boots with the US layout: restore the saved one, then ask
-    // which layouts it has installed (firmware without LAYOUTS stays silent).
+    // which layouts it has installed and its firmware version (firmware
+    // without LAYOUTS or VERSION stays silent).
     if (keyboardLayoutSelect.value) sendCommand('LAYOUT ' + keyboardLayoutSelect.value);
     sendCommand('LAYOUTS');
+    sendCommand('VERSION');
   } catch (e) {
     rxCharacteristic = null;
     setConnected(false);

@@ -5,9 +5,9 @@ parts talk to each other, and what every change must respect.
 
 | | |
 |---|---|
-| **Version** | 1.4 (1.0 = shipped features · 1.1–1.3 = Speech-to-Keyboard and keyboard layouts · 1.4 = app and firmware updates, planned) |
-| **Date** | 2026-10-25 |
-| **Status** | 1.0 current · 1.3 implemented, pending hardware verification (`TASKS.md` Phase S9) · 1.4 planned (`PLAN.md` Part 2) |
+| **Version** | 1.5 (1.0 = shipped features · 1.1–1.3 = Speech-to-Keyboard and keyboard layouts · 1.4–1.5 = app and firmware updates) |
+| **Date** | 2026-10-27 |
+| **Status** | 1.0 current · 1.3 implemented, pending hardware verification (`TASKS.md` Phase S9) · 1.5 implemented (updates, Option A), pending hardware verification (`TASKS.md` Phase U7); Option B not started |
 | **Authors** | Daniele Marsico and Claude (Anthropic) |
 
 ---
@@ -55,7 +55,7 @@ by `\n`.
 | `LAYOUTS` | replies `Layouts: US,IT,…`, the layouts installed on the dongle |
 | `CIPHER <base64>` | AES-CTR (IV ‖ ciphertext) decrypted with `secret.txt`, then typed |
 | `MAINTENANCE` | writes `maintenance.flag` and resets with the drive visible |
-| `VERSION` *(1.4, planned)* | replies `Version: <firmware version>` (e.g. `Version: 2026.10.25`) |
+| `VERSION` *(1.5)* | replies `Version: <firmware version>` (e.g. `Version: 2026.10.27`) |
 
 Rules:
 
@@ -70,8 +70,9 @@ Rules:
 5. **Unknown or malformed commands are ignored**, never fatal.
 6. **Replies end with `\n`** and may arrive split across notifications. The
    app reassembles lines (`handleDeviceData`) before parsing them.
-7. **On connect the app sends `LAYOUT <saved>` and `LAYOUTS`**, because the
-   dongle boots with the US layout.
+7. **On connect the app sends `LAYOUT <saved>`, `LAYOUTS` and `VERSION`**,
+   because the dongle boots with the US layout. No `VERSION` reply within 3 s
+   means firmware older than 1.5.
 8. **The device never makes network calls** and never stores user text.
 
 ## 3. Shipped features (v1.0)
@@ -182,7 +183,7 @@ Dictate on the phone and the words are typed on the PC through the dongle.
 - Only same-origin `GET` requests are cached. `POST` and cross-origin requests
   bypass the cache. Bump `CACHE` on every release that changes app assets.
 
-## 6. Planned feature: App and firmware updates (v1.4)
+## 6. App and firmware updates (v1.4 planned, v1.5 implemented)
 
 Keep the installed app and the dongle current without reinstalling the app
 or running the installer by hand. Design and feasibility: `PLAN.md` Part 2.
@@ -195,7 +196,7 @@ or running the installer by hand. Design and feasibility: `PLAN.md` Part 2.
   command, so the app can say "firmware update available" on connect.
 - **Firmware manifest**: the Pages deploy publishes `firmware/manifest.json`
   (version, and path, size and CRC32 for each file) next to the device files.
-- **Web Serial updater (Option A, chosen first)**: desktop Chrome/Edge on the
+- **Web Serial updater (Option A, implemented in `app/updater.js`)**: desktop Chrome/Edge on the
   PC the dongle is plugged into. It uses the USB serial console, which stays on
   in HID-only mode, to interrupt `code.py` and write the files through the raw
   REPL. It needs no firmware change and no maintenance mode, and it doubles as
@@ -266,3 +267,4 @@ or running the installer by hand. Design and feasibility: `PLAN.md` Part 2.
 | 1.2 | 2026-10-25 | Worker work handed off to dudu-worker; opt-in agent cleanup (`X-Tembed-Mode: dictation`); speech language vs host layout; layout registry, `LAYOUTS`, generated charsets |
 | 1.3 | 2026-10-25 | Implemented: Voice tab (`app/voice.js`), layout registry + `LAYOUTS` + UK/DE/FR/ES layouts, `app/layouts.json` generator, per-character `TYPE`, TX line reassembly, layout sync on connect, service worker bypass. Pending hardware verification |
 | 1.4 | 2026-10-25 | Planned: in-place app updates (no-cache revalidation, `version.json`, update banner), firmware `VERSION` command and manifest, Web Serial updater (Option A), authenticated Bluetooth OTA with rollback (Option B); rules in §7 |
+| 1.5 | 2026-10-27 | Implemented: service worker `ble-mouse-v9` with `no-cache` revalidation, deploy-time `version.json`, update banner (`app/updates.js`), firmware `VERSION` (`2026.10.27`), `tools/build_firmware_manifest.py` published to `firmware/`, Web Serial updater (`app/updater.js`). Pending hardware verification; Option B not started |

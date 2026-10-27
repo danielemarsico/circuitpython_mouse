@@ -8,6 +8,8 @@
   <link rel="manifest" href="manifest.json" />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    /* Classes that set display (e.g. .field-label) must not undo hidden. */
+    [hidden] { display: none !important; }
 
     body {
       font-family: system-ui, sans-serif;
@@ -228,6 +230,33 @@
     .check-row { display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; margin-top: 0.6rem; }
     .check-row input { accent-color: #3b82f6; width: 1.05rem; height: 1.05rem; }
 
+    /* Updates */
+    #update-banner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+      background: #1e3a5f;
+      color: #bfdbfe;
+      padding: 0.6rem 1.25rem;
+      font-size: 0.85rem;
+      border-bottom: 1px solid #0f3460;
+    }
+    #update-banner button { padding: 0.4rem 0.9rem; font-size: 0.8rem; background: #3b82f6; color: #fff; }
+    .kv { display: flex; justify-content: space-between; gap: 0.75rem; font-size: 0.85rem; padding: 0.2rem 0; }
+    .kv span:first-child { color: #aaa; }
+    .kv span:last-child { text-align: right; overflow-wrap: anywhere; }
+    #fw-available { color: #facc15; }
+    #fw-progress { list-style: none; font-family: monospace; font-size: 0.75rem; margin-top: 0.5rem; max-height: 10rem; overflow-y: auto; }
+    #fw-progress li { display: flex; justify-content: space-between; gap: 0.5rem; padding: 0.1rem 0; }
+    #fw-progress li span:last-child { color: #888; white-space: nowrap; }
+    #fw-progress li.writing span:last-child  { color: #facc15; }
+    #fw-progress li.verified span:last-child { color: #4ade80; }
+    #fw-progress li.failed span:last-child   { color: #f87171; }
+    #fw-status { font-size: 0.8rem; color: #aaa; margin-top: 0.5rem; min-height: 1.1em; }
+    #fw-status.error { color: #f87171; }
+    #fw-status.ok    { color: #4ade80; }
+
     #log {
       background: #0d1117;
       border: 1px solid #0f3460;
@@ -257,6 +286,11 @@
     ⬇ Install
   </button>
 </header>
+
+<div id="update-banner" role="status" hidden>
+  <span>Update available</span>
+  <button id="btn-update-reload">Reload</button>
+</div>
 
 <main>
 
@@ -520,6 +554,20 @@
       </div>
     </div>
 
+    <!-- App and firmware updates -->
+    <div class="card" id="card-updates">
+      <h2>Updates</h2>
+      <div class="kv"><span>App</span><span id="app-version">…</span></div>
+      <div class="kv"><span>Dongle firmware</span><span id="fw-device-version">connect to check</span></div>
+      <div class="kv"><span>Latest firmware</span><span id="fw-latest-version">…</span></div>
+      <p id="fw-available" class="field-label" style="margin:0.4rem 0 0;" hidden>Firmware update available</p>
+      <button class="btn-blue" id="btn-fw-update" style="width:100%;margin-top:0.75rem;" hidden>Update over USB</button>
+      <p id="fw-serial-hint" class="field-label" style="margin:0.6rem 0 0;" hidden>To update the dongle, open this app in Chrome or Edge on the PC the dongle is plugged into.</p>
+      <ul id="fw-progress"></ul>
+      <p id="fw-status"></p>
+      <button class="btn-primary" id="btn-fw-retry" style="width:100%;margin-top:0.5rem;" hidden>Retry</button>
+    </div>
+
     <button class="btn-send" id="btn-save-settings" style="width:100%;padding:0.75rem;">Save</button>
     <p id="settings-saved-msg" style="font-size:0.75rem;color:#4ade80;text-align:center;margin-top:-0.5rem;visibility:hidden;">Saved to browser storage.</p>
 
@@ -532,10 +580,6 @@
 
 <script src="app.js"></script>
 <script src="voice.js"></script>
-<script>
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('service-worker.js');
-  }
-</script>
+<script src="updates.js"></script>
 </body>
 </html>

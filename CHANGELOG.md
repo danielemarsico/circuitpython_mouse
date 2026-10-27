@@ -8,6 +8,11 @@ Format: `[YYYY-MM-DD] - Description`
 ## [Unreleased]
 
 ### Added
+- `[2026-10-27]` - App updates in place: deploy-time `app/version.json`, app version in Settings and About, and an "Update available → Reload" banner when the app returns to the foreground with a newer version (held while dictating or typing); new `app/updates.js`
+- `[2026-10-27]` - Firmware `VERSION` constant (`2026.10.27`) and `VERSION` command; the app asks for it on connect and shows "Firmware update available" when a newer firmware is published
+- `[2026-10-27]` - `tools/build_firmware_manifest.py` publishes the device files and `firmware/manifest.json` (version, size and CRC32 per file, never `secret.txt`); run by the Pages deploy
+- `[2026-10-27]` - Firmware update over USB (`app/updater.js`, loaded on demand): Settings → Updates → Update over USB in desktop Chrome/Edge drives the CircuitPython raw REPL over Web Serial, writes only changed files (verified `.new` + swap, `code.py` last, `code.bak` kept) and resets the dongle; Retry after errors, clear message in maintenance mode
+- `[2026-10-27]` - 21 Playwright tests in `test/webapp_tests/tests/updates.spec.js` with a Web Serial mock that emulates the raw REPL and a filesystem; coverage report includes `updates.js` and `updater.js`
 - `[2026-10-25]` - Plan for app and firmware updates (v1.4): `PLAN.md` Part 2 (feasibility of in-place PWA updates, Web Serial updater, authenticated Bluetooth OTA) and `RULEBOOK.md` §6–§7 with update rules and the planned `VERSION` command
 - `[2026-10-25]` - Speech to Keyboard: new Voice tab (`app/voice.js`) records from the microphone, sends 16 kHz mono WAV to the DuDu worker (`POST /v1/utterance`, transcribe mode, optional `X-Tembed-Mode: dictation` agent cleanup) or uses the browser's speech recognition, and types the transcript through paced `TYPE`/`KEY` commands of 60 bytes or less; editable preview, auto-type, raw-transcript undo, IT/EN/auto speech language
 - `[2026-10-25]` - Settings card "Speech to Keyboard": engine, worker URL, API key, agent cleanup, trailing space, Test connection
@@ -19,6 +24,8 @@ Format: `[YYYY-MM-DD] - Description`
 - `[2026-10-25]` - Plan/RULEBOOK v1.2: worker changes (CORS, `X-Tembed-Mode: dictation` cleanup) handed off to dudu-worker; separate speech language and host keyboard layout; firmware layout registry with `LAYOUTS` command and generated per-layout charsets
 
 ### Changed
+- `[2026-10-27]` - Service worker (cache `ble-mouse-v9`) revalidates every file with `cache: 'no-cache'`, never caches `version.json` or `firmware/`, and is registered with `updateViaCache: 'none'`
+- `[2026-10-27]` - Docs: README, About and `tools/INSTALL.md` recommend the USB updater (with the Linux `dialout` note); `RULEBOOK.md` 1.5; `TASKS.md` phases U1–U8
 - `[2026-10-25]` - Firmware `TYPE` and `CIPHER` type one character at a time and skip untypable characters instead of losing the rest of the text
 - `[2026-10-25]` - The app reassembles device replies split across BLE notifications, and on connect restores the saved keyboard layout (the dongle boots with US)
 - `[2026-10-25]` - Service worker (cache `ble-mouse-v8`) no longer intercepts POST or cross-origin requests, and caches `voice.js` and `layouts.json`
@@ -26,6 +33,7 @@ Format: `[YYYY-MM-DD] - Description`
 - `[2026-10-25]` - Test server binds to `127.0.0.1` and honours `TEST_PORT`
 
 ### Fixed
+- `[2026-10-27]` - Elements with the `hidden` attribute stay hidden even when a class sets `display`
 - `[2026-10-25]` - `tools/INSTALL.md` and README project structure no longer describe `boot.py` as "hold the button at boot" (replaced by the `maintenance.flag` mechanism)
 
 ### Fixed

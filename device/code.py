@@ -17,6 +17,10 @@ import adafruit_ble
 from adafruit_ble.advertising.standard import ProvideServicesAdvertisement
 from adafruit_ble.services.nordic import UARTService
 
+# Firmware release, YYYY.MM.DD[.n]. Bump on every firmware change; it is the
+# version published in firmware/manifest.json (tools/build_firmware_manifest.py).
+VERSION = "2026.10.27"
+
 # Wait at the beginning
 print("booting...")
 time.sleep(10)
@@ -253,6 +257,8 @@ def handle_command(cmd):
         return "Layout: " + code
     elif verb == "LAYOUTS":
         return "Layouts: " + ",".join(installed_layouts())
+    elif verb == "VERSION":
+        return "Version: " + VERSION
     elif verb == "MAINTENANCE":
         if enter_maintenance() is False:
             return "Maintenance mode unavailable (drive already mounted)"

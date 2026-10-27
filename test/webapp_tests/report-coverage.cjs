@@ -9,7 +9,7 @@ const reports = require('istanbul-reports');
 const COVERAGE_DIR = path.resolve(__dirname, '.coverage');
 const APP_DIR = path.resolve(__dirname, '..', '..', 'app');
 // Scripts loaded by index.html that are measured.
-const APP_SCRIPTS = ['app.js', 'voice.js'];
+const APP_SCRIPTS = ['app.js', 'voice.js', 'updates.js', 'updater.js'];
 
 (async () => {
   const coverageMap = libCoverage.createCoverageMap();

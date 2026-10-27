@@ -37,6 +37,34 @@ Copy the following onto the `CIRCUITPY` drive:
 
 The code runs automatically on boot.
 
+### Updating over USB from the web app (recommended)
+
+Once the dongle runs this firmware, the easiest upgrade needs no drive and no
+installer: open the web app in **Chrome or Edge on the PC the dongle is plugged
+into**, go to **Settings → Updates** and click **Update over USB**, then pick
+the dongle's serial port (CircuitPython CDC).
+
+The app talks to the CircuitPython serial console, which stays on in HID-only
+mode: it stops `code.py`, compares every file with the published
+`firmware/manifest.json` (size + CRC32), writes only the files that changed
+(libraries first, `code.py` last, each one written to `<name>.new`, verified,
+then swapped in), keeps the previous `code.py` as `code.bak`, and hard-resets
+the dongle. `secret.txt` is never touched. If something fails, leftover `.new`
+files are removed and **Retry** resumes; the old firmware is intact until the
+final swap. Because it works from the REPL, it also repairs a dongle whose
+`code.py` is broken.
+
+- Leave the dongle in **normal (HID-only) mode**. In maintenance mode the PC
+  owns the drive and the update can't write; the app says so.
+- **Linux:** your user needs access to `/dev/ttyACM*`:
+  `sudo usermod -aG dialout $USER`, then log out and back in.
+- Not available on the phone (no Web Serial); the Updates card says so.
+
+When connected over Bluetooth, the app asks the dongle for its `VERSION` and
+shows **Firmware update available** in Settings when a newer release is
+published. Firmware older than this feature doesn't answer and is shown as
+"unknown (older than 1.4)".
+
 ### Packaged Install / Upgrade
 
 Instead of copying files by hand you can build a release archive and use the
@@ -186,6 +214,7 @@ Send the following text commands (terminated with a newline):
 | `KEY name`      | Press one key by `Keycode` name (e.g. `KEY ENTER`, `KEY SPACE`) |
 | `LAYOUT code`   | Switch the keyboard layout: `US` (or `EN`), `IT`, `UK`, `DE`, `FR`, `ES` (Windows layouts); replies `Layout: <code>` or `Layout <code> not available` |
 | `LAYOUTS`       | Reply with the installed layouts, e.g. `Layouts: US,IT,UK,DE,FR,ES` |
+| `VERSION`       | Reply with the firmware version, e.g. `Version: 2026.10.27` |
 | `MAINTENANCE`   | Re-enable the `CIRCUITPY` drive on the next boot and reset (see [Hiding the USB Drive](#hiding-the-usb-drive-hid-only-mode)) |
 | `CIPHER <b64>`  | Decrypt an AES-128-CTR payload and type the result (see [Cipher](#cipher)) |
 
@@ -367,11 +396,30 @@ Persists configuration to `localStorage` and applies it to the device on Save.
 │  └────────────────────────────┘  │
 │  [ Clear ] [ Load SVG ] [Set Jiggle (disabled until path drawn)]
 ├──────────────────────────────────┤
+│  Updates                         │
+│  App              2026.10.27-…   │  ← from version.json (dev locally)
+│  Dongle firmware  2026.10.25     │  ← VERSION reply on connect
+│  Latest firmware  2026.10.27     │  ← firmware/manifest.json
+│  [ Update over USB ]             │  ← desktop Chrome/Edge only (Web Serial)
+├──────────────────────────────────┤
 │  [ Save Settings ]               │  ← Persists all values + sends JIGGLE
 └──────────────────────────────────┘
 ```
 
 **Jiggle Path:** draw a shape freehand or upload an SVG `<path>`. **Set Jiggle** downsamples to ≤ 30 delta pairs and sends `JIGGLEPATH dx1,dy1,...` to the device.
+
+**Updates:** shows the app version, the dongle's firmware version and the
+latest published firmware, and updates the dongle over USB (see
+[Updating over USB](#updating-over-usb-from-the-web-app-recommended)).
+
+#### Keeping the installed app up to date
+
+The installed PWA never needs to be reinstalled. The service worker revalidates
+every file with the server (`cache: 'no-cache'`), and each deploy publishes a
+`version.json`. When the app comes back to the foreground (at most every
+5 minutes) and finds a newer version, an **Update available → Reload** banner
+appears. It never reloads on its own, and it waits while you are dictating or
+typing.
 
 ---
 
@@ -429,6 +477,10 @@ app/
 ├── index.html           # UI (buttons, inputs, log)
 ├── app.js               # Web Bluetooth + command logic
 ├── voice.js             # Speech to Keyboard (Voice tab)
+├── updates.js           # App version + update banner, firmware version, Updates card
+├── updater.js           # USB firmware updater (Web Serial raw REPL), loaded on demand
+├── version.json         # App version (generated at deploy, not in git)
+├── firmware/            # Device files + manifest.json (generated at deploy, not in git)
 ├── layouts.json         # Typable characters per keyboard layout (generated)
 ├── about.html           # Project description page
 ├── ble-debug.html       # Standalone BLE debug/test page
@@ -440,6 +492,7 @@ app/
 
 tools/
 ├── build_package.py     # Builds dist/circuitpython_mouse-device-<version>.zip
+├── build_firmware_manifest.py # Publishes device files + manifest.json to app/firmware/
 ├── gen_layout_charsets.py # Regenerates app/layouts.json from the layout sources
 ├── install.sh           # Linux/macOS installer for a mounted CIRCUITPY drive
 ├── install.ps1          # Windows (PowerShell) installer
@@ -479,15 +532,18 @@ test/
 │   ├── fixtures.js          # Custom Playwright fixture: collects V8 JS coverage
 │   ├── report-coverage.cjs  # Converts V8 coverage → Istanbul text report
 │   ├── mocks/
-│   │   └── bluetooth-mock.js  # Replaces navigator.bluetooth with NUS device
+│   │   ├── bluetooth-mock.js  # Replaces navigator.bluetooth with NUS device
+│   │   └── serial-mock.js     # Replaces navigator.serial with a CircuitPython raw REPL + fake filesystem
 │   └── tests/
 │       ├── connect.spec.js    #  5 tests: connect, disconnect, enable/disable, log
 │       ├── controls.spec.js   # 15 tests: START/STOP/TOGGLE, move, click, scroll, type
 │       ├── trackpad.spec.js   #  7 tests: draw mode, right click, tap, press/release
 │       ├── jiggle.spec.js     #  8 tests: sliders, localStorage, JIGGLE, canvas, SVG
 │       ├── cipher.spec.js     #  5 tests: encrypt, eye toggle, layout, persistence
-│       └── voice.spec.js      # 23 tests: text pipeline, WAV, worker requests/errors,
+│       ├── voice.spec.js      # 23 tests: text pipeline, WAV, worker requests/errors,
 │                              #           auto-type, settings, layouts (fake microphone)
+│       └── updates.spec.js    # 21 tests: app version + banner, VERSION, firmware manifest,
+│                              #           USB updater (changed files only, maintenance, retry)
 └── device_test/             # Placeholder for future CircuitPython tests
 ```
 
@@ -506,7 +562,7 @@ cd test/webapp_tests
 npm install
 npx playwright install chromium
 
-# Run all 61 tests
+# Run all 82 tests
 npm test
 
 # Run with browser visible
@@ -523,8 +579,10 @@ node report-coverage.cjs      # prints text report
 ```
 
 ```
-app.js    statements 86.97% (541/622) · branches 100%   (141/141) · functions 94.11% (16/17)
-voice.js  statements 92.6%  (426/460) · branches 98.57% (138/140) · functions 96.29% (26/27)
+app.js      statements 87.12% (548/629) · branches 100%   (144/144)
+voice.js    statements 92.6%  (426/460) · branches 98.57% (138/140) · functions 96.29% (26/27)
+updates.js  statements 98.22% (221/225) · branches 93.58% (73/78)   · functions 100% (12/12)
+updater.js  statements 96.93% (316/326) · branches 94.39% (101/107) · functions 91.66% (22/24)
 ```
 
 **Uncovered code** (83 lines): the Password Deriver (requires network fetch), Copy-to-clipboard (not available in headless), keyboard Enter key shortcuts, and trackpad `pointermove` with real movement deltas (synthetic events carry `movementX/Y = 0`). In `voice.js` the browser speech engine is not covered, because headless Chromium has no speech recognition service. These are expected gaps for a headless test suite without network or clipboard infrastructure.

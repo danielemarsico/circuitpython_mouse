@@ -1,5 +1,58 @@
 # Tasks
 
+## App and firmware updates (v1.4) — see `PLAN.md` Part 2, rules in `RULEBOOK.md` §6–§7
+
+### Phase U1 — PWA updates (`app/service-worker.js`, `app/updates.js`, `static.yml`)
+- [x] Service worker: same-origin GETs with `cache: 'no-cache'`; `version.json` and `firmware/` never cached; `CACHE` → `ble-mouse-v9`
+- [x] Register with `updateViaCache: 'none'` (moved from `index.html` into `updates.js`)
+- [x] Deploy writes `app/version.json` (`<date>-<sha7>`, commit, built); a checkout without it shows `dev`
+- [x] Update banner on `visibilitychange` (≤ every 5 min): new `version.json` or a new service worker → **Update available → Reload**; held while recording or typing
+- [x] App version in Settings (Updates card) and About
+
+### Phase U2 — Firmware version
+- [x] `VERSION = "2026.10.27"` in `code.py` and the `VERSION` command (`Version: …`)
+- [x] App sends `VERSION` on connect; no reply in 3 s → "unknown (older than 1.4)"; cleared on disconnect
+
+### Phase U3 — Firmware manifest
+- [x] `tools/build_firmware_manifest.py` → `app/firmware/` + `manifest.json` (version from `code.py`, size + CRC32, never `secret.txt`)
+- [x] `static.yml` runs it before the Pages upload; `app/firmware/` and `app/version.json` are gitignored
+- [x] "Firmware update available" when the manifest is newer than the dongle
+
+### Phase U4 — On the device (needs the dongle and a serial terminal)
+- [ ] Raw REPL reachable over the CDC port in HID-only mode (Ctrl-C, any key, Ctrl-A)
+- [ ] `binascii.crc32`, `binascii.a2b_base64` and `json` available on CircuitPython 10.1.3 nRF52
+- [ ] `storage.remount("/", readonly=False)` works from the REPL in HID-only mode, fails in maintenance mode
+
+### Phase U5 — Option A: Web Serial updater (`app/updater.js`)
+- [x] Updates card: device / latest version, **Update over USB** only when `navigator.serial` exists, PC hint otherwise
+- [x] Raw REPL driver: enter, `exec` with OK/stdout/stderr parsing, helpers defined once on the device
+- [x] Download + verify against the manifest before touching the device; send only files with a different CRC32
+- [x] Write `<path>.new` in 144-byte chunks, read back size + CRC32, swap (`code.py` → `code.bak`); libraries first, `code.py` last
+- [x] Remount read-only, `microcontroller.reset()`, close the port
+- [x] On error: remove `.new`, keep the port open, **Retry**; maintenance mode and "no REPL" messages
+- [ ] Filter the port picker by USB vendor ID once confirmed on the device
+- [x] Playwright: `mocks/serial-mock.js` (raw REPL + fake filesystem), `updates.spec.js` (21 tests)
+
+### Phase U6 — Docs
+- [x] README (Updating over USB, `dialout`, update banner, Updates card, `VERSION`), `about.html`, `tools/INSTALL.md`
+- [x] `RULEBOOK.md` → 1.5, `CHANGELOG.md`
+
+### Phase U7 — Verification on hardware (PLAN Part 2 §7)
+- [ ] Deploy a change with the PWA in the background → foreground → banner → Reload → new version, no reinstall
+- [ ] Offline launch: shell from cache, no banner or error loop
+- [ ] Old firmware → "unknown (older than 1.4)", update available
+- [ ] Desktop Chrome, HID-only mode → Update over USB → only changed files sent → reset → `VERSION` reports the new version → Layout test still works
+- [ ] Unplug mid-update → replug → old firmware runs (or `code.bak` restorable) → rerun completes
+- [ ] Maintenance mode → "drive is mounted" message
+- [ ] Phone → PC hint, no button
+
+### Phase U8 — Later / optional (Option B)
+- [ ] BLE pairing/bonding
+- [ ] OTA commands (`OTA NONCE/BEGIN/DATA/END/COMMIT`) with AES-CMAC from `secret.txt`
+- [ ] `boot.py` rollback (`pending.flag` / `attempt.flag`, `code.bak`)
+
+---
+
 ## Speech-to-Keyboard (v1.1) — see `PLAN.md`, rules in `RULEBOOK.md` §5
 
 ### Phase S1 — Server: dudu-worker (EXTERNAL — handed off to the dudu-worker repo)

@@ -12,6 +12,16 @@ install.sh          # Linux / macOS installer
 install.ps1         # Windows installer
 ```
 
+## Easiest: update over USB from the web app
+
+If the dongle already runs firmware from this project, you don't need this
+archive: open the web app in Chrome or Edge on the PC the dongle is plugged
+into, go to **Settings → Updates → Update over USB** and pick the dongle's
+serial port. Leave the dongle in normal mode (not maintenance mode). On Linux,
+add yourself to the `dialout` group first (`sudo usermod -aG dialout $USER`,
+then log in again). The installers below remain the way to do a first install
+or to work offline.
+
 ## Mount the drive first
 
 If `boot.py` is already installed, the `CIRCUITPY` drive is hidden by design.
