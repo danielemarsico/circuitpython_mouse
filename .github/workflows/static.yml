@@ -35,6 +35,16 @@ jobs:
         uses: actions/configure-pages@v5
       - name: Zip device folder
         run: zip -r app/device.zip device/
+      - name: Publish firmware files and manifest
+        # app/firmware/: device files + manifest.json for the USB updater.
+        run: python3 tools/build_firmware_manifest.py
+      - name: Write version.json
+        # Read by the app to show its version and offer "Update available".
+        run: |
+          printf '{"version": "%s", "commit": "%s", "built": "%s"}\n' \
+            "$(date -u +%Y.%m.%d)-${GITHUB_SHA::7}" "$GITHUB_SHA" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            > app/version.json
+          cat app/version.json
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:

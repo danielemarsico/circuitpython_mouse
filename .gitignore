@@ -6,3 +6,8 @@ test/webapp_tests/test-results/
 
 # Build output
 dist/
+
+# Generated at deploy time (.github/workflows/static.yml)
+app/version.json
+app/firmware/
+tools/__pycache__/

@@ -1,5 +1,6 @@
 import time
 import os
+import gc
 import board
 import digitalio
 import microcontroller
@@ -11,15 +12,14 @@ from adafruit_hid.mouse import Mouse
 from adafruit_hid.keyboard import Keyboard
 from adafruit_hid.keyboard_layout_us import KeyboardLayoutUS
 from adafruit_hid.keycode import Keycode
-try:
-    from keyboard_layout_win_it import KeyboardLayout as KeyboardLayoutIT
-    _HAS_IT_LAYOUT = True
-except ImportError:
-    _HAS_IT_LAYOUT = False
 from adafruit_debouncer import Debouncer
 import adafruit_ble
 from adafruit_ble.advertising.standard import ProvideServicesAdvertisement
 from adafruit_ble.services.nordic import UARTService
+
+# Firmware release, YYYY.MM.DD[.n]. Bump on every firmware change; it is the
+# version published in firmware/manifest.json (tools/build_firmware_manifest.py).
+VERSION = "2026.10.27"
 
 # Wait at the beginning
 print("booting...")
@@ -43,6 +43,49 @@ print("setting up mouse...")
 m = Mouse(usb_hid.devices)
 kbd = Keyboard(usb_hid.devices)
 layout = KeyboardLayoutUS(kbd)
+
+# Host keyboard layouts: code -> module in lib/ (None = built into adafruit_hid).
+# Modules are imported only when selected, so unused layouts cost no RAM.
+# Keep in sync with LAYOUTS in tools/gen_layout_charsets.py.
+LAYOUTS = {
+    "US": None,
+    "IT": "keyboard_layout_win_it",
+    "UK": "keyboard_layout_win_uk",
+    "DE": "keyboard_layout_win_de",
+    "FR": "keyboard_layout_win_fr",
+    "ES": "keyboard_layout_win_es",
+}
+LAYOUT_ALIASES = {"EN": "US"}
+
+
+def _layout_installed(module):
+    if module is None:
+        return True
+    for ext in (".mpy", ".py"):
+        try:
+            os.stat("/lib/" + module + ext)
+            return True
+        except OSError:
+            pass
+    return False
+
+
+def installed_layouts():
+    return [code for code, module in LAYOUTS.items() if _layout_installed(module)]
+
+
+def load_layout(code):
+    """The KeyboardLayout for code, or None when it is unknown or not installed."""
+    module = LAYOUTS.get(code, "")
+    if module is None:
+        return KeyboardLayoutUS(kbd)
+    if not module or not _layout_installed(module):
+        return None
+    try:
+        return __import__(module).KeyboardLayout(kbd)
+    except (ImportError, MemoryError) as e:
+        print("layout", code, "failed:", e)
+        return None
 
 # Setup LED
 led = digitalio.DigitalInOut(board.INVERTED_LED)
@@ -115,6 +158,19 @@ def _decrypt_cipher(b64_payload):
     return pt.decode("utf-8")
 
 
+def type_text(text):
+    """Type text one character at a time, skipping any the layout can't type.
+
+    layout.write() stops at the first such character, which would lose the rest
+    of a dictated sentence.
+    """
+    for char in text:
+        try:
+            layout.write(char)
+        except ValueError:
+            print("untypable:", repr(char))
+
+
 def handle_command(cmd):
     global status, move_index, last_movement, layout, JIGGLE_INTERVAL, JIGGLE_MOVES
     cmd = cmd.strip()
@@ -183,10 +239,7 @@ def handle_command(cmd):
         except (ValueError, IndexError):
             pass
     elif verb == "TYPE" and len(cmd) > 5:
-        try:
-            layout.write(cmd[5:])
-        except ValueError:
-            pass
+        type_text(cmd[5:])
     elif verb == "KEY" and len(parts) >= 2:
         key_name = parts[1].upper()
         key = getattr(Keycode, key_name, None)
@@ -194,23 +247,25 @@ def handle_command(cmd):
             kbd.press(key)
             kbd.release_all()
     elif verb == "LAYOUT" and len(parts) >= 2:
-        lang = parts[1].upper()
-        if lang == "EN":
-            layout = KeyboardLayoutUS(kbd)
-            return "Layout: EN"
-        elif lang == "IT":
-            if _HAS_IT_LAYOUT:
-                layout = KeyboardLayoutIT(kbd)
-                return "Layout: IT"
-            else:
-                return "Layout IT not available"
+        code = parts[1].upper()
+        code = LAYOUT_ALIASES.get(code, code)
+        new_layout = load_layout(code)
+        if new_layout is None:
+            return "Layout " + code + " not available"
+        layout = new_layout
+        gc.collect()
+        return "Layout: " + code
+    elif verb == "LAYOUTS":
+        return "Layouts: " + ",".join(installed_layouts())
+    elif verb == "VERSION":
+        return "Version: " + VERSION
     elif verb == "MAINTENANCE":
         if enter_maintenance() is False:
             return "Maintenance mode unavailable (drive already mounted)"
     elif verb == "CIPHER" and len(parts) >= 2:
         if cipher_key:
             try:
-                layout.write(_decrypt_cipher(parts[1]))
+                type_text(_decrypt_cipher(parts[1]))
             except Exception as e:
                 print("CIPHER error:", e)
         else:

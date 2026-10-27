@@ -8,7 +8,8 @@ const reports = require('istanbul-reports');
 
 const COVERAGE_DIR = path.resolve(__dirname, '.coverage');
 const APP_DIR = path.resolve(__dirname, '..', '..', 'app');
-const APP_JS = path.join(APP_DIR, 'app.js');
+// Scripts loaded by index.html that are measured.
+const APP_SCRIPTS = ['app.js', 'voice.js', 'updates.js', 'updater.js'];
 
 (async () => {
   const coverageMap = libCoverage.createCoverageMap();
@@ -25,11 +26,12 @@ const APP_JS = path.join(APP_DIR, 'app.js');
     const v8Data = JSON.parse(fs.readFileSync(path.join(COVERAGE_DIR, file), 'utf-8'));
 
     for (const entry of v8Data) {
-      if (!entry.url || !entry.url.includes('/app.js')) continue;
+      const script = entry.url && APP_SCRIPTS.find(s => entry.url.startsWith('http') && new URL(entry.url).pathname.endsWith('/' + s));
+      if (!script) continue;
       if (!entry.source || entry.source.length === 0) continue;
       if (!entry.functions || entry.functions.length === 0) continue;
 
-      const converter = v8toIstanbul(APP_JS, 0, { source: entry.source });
+      const converter = v8toIstanbul(path.join(APP_DIR, script), 0, { source: entry.source });
       await converter.load();
       converter.applyCoverage(entry.functions);
       const data = converter.toIstanbul();
@@ -42,7 +44,7 @@ const APP_JS = path.join(APP_DIR, 'app.js');
   }
 
   console.log(`\nCoverage files processed: ${files.length}`);
-  console.log(`App.js coverage entries: ${entriesProcessed}`);
+  console.log(`App script coverage entries: ${entriesProcessed}`);
 
   const context = libReport.createContext({
     dir: path.resolve(__dirname, 'coverage-report'),
@@ -53,10 +55,12 @@ const APP_JS = path.join(APP_DIR, 'app.js');
   reports.create('text', { file: 'coverage.txt', maxCols: 100 }).execute(context);
   reports.create('text-summary').execute(context);
 
-  const fileCoverage = coverageMap.fileCoverageFor(APP_JS);
-  if (fileCoverage) {
-    const s = fileCoverage.toSummary();
-    console.log(`\nStatement coverage: ${s.statements.pct}% (${s.statements.covered}/${s.statements.total})`);
+  for (const script of APP_SCRIPTS) {
+    const file = path.join(APP_DIR, script);
+    if (!coverageMap.files().includes(file)) continue;
+    const s = coverageMap.fileCoverageFor(file).toSummary();
+    console.log(`\n${script}`);
+    console.log(`Statement coverage: ${s.statements.pct}% (${s.statements.covered}/${s.statements.total})`);
     console.log(`Branch coverage:   ${s.branches.pct}% (${s.branches.covered}/${s.branches.total})`);
     console.log(`Function coverage: ${s.functions.pct}% (${s.functions.covered}/${s.functions.total})`);
     console.log(`Line coverage:     ${s.lines.pct}% (${s.lines.covered}/${s.lines.total})`);

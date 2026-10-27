@@ -255,8 +255,10 @@ device/secret.txt →  CIRCUITPY/secret.txt  (edit password first)</pre>
       <li>Mouse controls: directional pad, custom X/Y move, left/middle/right click, scroll</li>
       <li><strong>Type Text</strong> — send text to be typed via USB HID on the connected PC</li>
       <li><strong>Cipher Text</strong> — AES-128-CTR encrypted text; the device decrypts and types it, protecting passwords over BLE</li>
-      <li><strong>Keyboard Layout</strong> (Settings) — select English (US) or Italian to match the OS of the destination machine</li>
-      <li>Installable as a PWA on Android</li>
+      <li><strong>Speech to Keyboard</strong> (Voice tab) — dictate in Italian or English; the transcript is typed on the PC</li>
+      <li><strong>Keyboard Layout</strong> (Settings) — US, Italian, UK, German, French or Spanish, to match the OS of the destination machine</li>
+      <li>Installable as a PWA on Android; updates itself in place (an <strong>Update available → Reload</strong> banner, never a reinstall)</li>
+      <li><strong>Updates</strong> (Settings) — app and dongle firmware versions, and <strong>Update over USB</strong> from Chrome/Edge on the PC the dongle is plugged into</li>
     </ul>
   </section>
 
@@ -274,8 +276,10 @@ device/secret.txt →  CIRCUITPY/secret.txt  (edit password first)</pre>
         <tr><td><code>CLICK [LEFT|RIGHT|MIDDLE]</code></td><td>Mouse click</td></tr>
         <tr><td><code>SCROLL n</code></td><td>Scroll n steps (positive = up)</td></tr>
         <tr><td><code>TYPE text</code></td><td>Type text via USB HID keyboard</td></tr>
-        <tr><td><code>LAYOUT EN</code></td><td>Switch to English (US) keyboard layout</td></tr>
-        <tr><td><code>LAYOUT IT</code></td><td>Switch to Italian keyboard layout</td></tr>
+        <tr><td><code>KEY name</code></td><td>Press one key (e.g. <code>KEY ENTER</code>)</td></tr>
+        <tr><td><code>LAYOUT code</code></td><td>Switch keyboard layout: <code>US</code>/<code>EN</code>, <code>IT</code>, <code>UK</code>, <code>DE</code>, <code>FR</code>, <code>ES</code></td></tr>
+        <tr><td><code>LAYOUTS</code></td><td>List the layouts installed on the dongle</td></tr>
+        <tr><td><code>VERSION</code></td><td>Reply with the firmware version</td></tr>
         <tr><td><code>CIPHER &lt;b64&gt;</code></td><td>Decrypt AES-128-CTR payload and type it</td></tr>
       </tbody>
     </table>
@@ -287,11 +291,25 @@ device/secret.txt →  CIRCUITPY/secret.txt  (edit password first)</pre>
        plugged into — not the machine running the browser. If they differ, special characters
        (like <code>@</code>) will produce the wrong output.</p>
     <br>
-    <p>The Italian layout requires <code>keyboard_layout_win_it.mpy</code> and
-       <code>keycode_win_it.mpy</code> in the <code>/lib</code> folder on the CIRCUITPY drive
-       (available from the
+    <p>Each non-US layout needs its <code>keyboard_layout_win_xx.mpy</code> in the
+       <code>/lib</code> folder on the CIRCUITPY drive. The release package includes IT, UK, DE, FR
+       and ES (from the
        <a href="https://github.com/Neradoc/Circuitpython_Keyboard_Layouts/releases" target="_blank" style="color:#3b82f6;">
-       Neradoc keyboard layouts releases</a>).</p>
+       Neradoc keyboard layouts releases</a>). Use <strong>Layout test</strong> in Settings to
+       check that the setting matches the PC.</p>
+  </section>
+
+  <section>
+    <h3>Speech to Keyboard</h3>
+    <p>Open the <strong>Voice</strong> tab, pick the language you speak, then hold the mic button
+       while you talk (or tap once to start and again to stop). The recording is transcribed by
+       the DuDu worker, and the text appears in an editable box. <strong>Type it</strong> sends it
+       to the PC. Turn on <em>Type automatically</em> to skip the check.</p>
+    <br>
+    <p>Setup: Settings → <em>Speech to Keyboard</em> → enter your worker API key → Save →
+       Test connection. The speech language and the keyboard layout are separate settings:
+       accented letters are typed only when the PC's layout has them. Don't dictate passwords;
+       use Cipher.</p>
   </section>
 
   <section>
@@ -315,7 +333,15 @@ device/secret.txt →  CIRCUITPY/secret.txt  (edit password first)</pre>
     </ul>
   </section>
 
+  <p style="color:#666;font-size:0.8rem;">App <span id="app-version">…</span></p>
+
 </main>
+<script>
+  fetch('version.json', { cache: 'no-store' })
+    .then(r => (r.ok ? r.json().then(j => j.version) : 'dev'))
+    .catch(() => 'unknown')
+    .then(v => { document.getElementById('app-version').textContent = v; });
+</script>
 
 <footer>
   <p>MIT License · <a href="https://github.com/danielemarsico/circuitpython_mouse" target="_blank">github.com/danielemarsico/circuitpython_mouse</a></p>

@@ -1,0 +1,35 @@
+{
+  "generated_by": "tools/gen_layout_charsets.py",
+  "layouts": {
+    "US": {
+      "name": "English (US)",
+      "module": "keyboard_layout_us",
+      "chars": " !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~"
+    },
+    "IT": {
+      "name": "Italiano",
+      "module": "keyboard_layout_win_it",
+      "chars": " !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_abcdefghijklmnopqrstuvwxyz{|}£§°àçèéìòù€"
+    },
+    "UK": {
+      "name": "English (UK)",
+      "module": "keyboard_layout_win_uk",
+      "chars": " !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~£¦¬áéíóú€"
+    },
+    "DE": {
+      "name": "Deutsch",
+      "module": "keyboard_layout_win_de",
+      "chars": " !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~§°²³´µÀÁÂÄÈÉÊÌÍÎÒÓÔÖÙÚÛÜÝßàáâäèéêìíîòóôöùúûüý€"
+    },
+    "FR": {
+      "name": "Français",
+      "module": "keyboard_layout_win_fr",
+      "chars": " !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~£¤§¨°²µÀÂÃÄÈÊËÌÎÏÑÒÔÕÖÙÛÜàâãäçèéêëìîïñòôõöùûüÿ€"
+    },
+    "ES": {
+      "name": "Español",
+      "module": "keyboard_layout_win_es",
+      "chars": " !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~¡¨ª¬´·º¿ÀÁÂÃÄÇÈÉÊËÌÍÎÏÑÒÓÔÕÖÙÚÛÜÝàáâãäçèéêëìíîïñòóôõöùúûüýÿ€"
+    }
+  }
+}
