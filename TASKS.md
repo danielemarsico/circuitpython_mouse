@@ -19,9 +19,10 @@
 - [x] "Firmware update available" when the manifest is newer than the dongle
 
 ### Phase U4 — On the device (needs the dongle and a serial terminal)
-- [ ] Raw REPL reachable over the CDC port in HID-only mode (Ctrl-C, any key, Ctrl-A)
-- [ ] `binascii.crc32`, `binascii.a2b_base64` and `json` available on CircuitPython 10.1.3 nRF52
-- [ ] `storage.remount("/", readonly=False)` works from the REPL in HID-only mode, fails in maintenance mode
+- [x] Raw REPL reachable over the CDC port in HID-only mode (Ctrl-C, any key, Ctrl-A) — confirmed by a USB update on 2026-10-27
+- [x] `binascii.crc32`, `binascii.a2b_base64` and `json` available on CircuitPython 10.1.3 nRF52 — same
+- [x] `storage.remount("/", readonly=False)` works from the REPL in HID-only mode — same
+- [ ] `storage.remount` fails in maintenance mode, and the updater shows the "drive is mounted" message
 
 ### Phase U5 — Option A: Web Serial updater (`app/updater.js`)
 - [x] Updates card: device / latest version, **Update over USB** only when `navigator.serial` exists, PC hint otherwise
@@ -41,7 +42,8 @@
 - [ ] Deploy a change with the PWA in the background → foreground → banner → Reload → new version, no reinstall
 - [ ] Offline launch: shell from cache, no banner or error loop
 - [ ] Old firmware → "unknown (older than 1.4)", update available
-- [ ] Desktop Chrome, HID-only mode → Update over USB → only changed files sent → reset → `VERSION` reports the new version → Layout test still works
+- [x] Desktop Chromium (Lubuntu), HID-only mode → Update over USB → reset → existing features still work (2026-10-27; needed `snap connect chromium:raw-usb` + `dialout`)
+- [ ] After that update: `VERSION` reports `2026.10.27`, Layout test works, a second run sends nothing ("Already up to date")
 - [ ] Unplug mid-update → replug → old firmware runs (or `code.bak` restorable) → rerun completes
 - [ ] Maintenance mode → "drive is mounted" message
 - [ ] Phone → PC hint, no button

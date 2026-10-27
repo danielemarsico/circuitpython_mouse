@@ -58,6 +58,11 @@ final swap. Because it works from the REPL, it also repairs a dongle whose
   owns the drive and the update can't write; the app says so.
 - **Linux:** your user needs access to `/dev/ttyACM*`:
   `sudo usermod -aG dialout $USER`, then log out and back in.
+- **Ubuntu / Lubuntu Chromium (snap):** the snap sandbox hides serial ports,
+  so the port picker stays empty. Run `sudo snap connect chromium:raw-usb`,
+  then quit Chromium completely and reopen it. Chrome or Edge from a `.deb`
+  doesn't need this. If the picker is still empty, `chrome://device-log`
+  shows why.
 - Not available on the phone (no Web Serial); the Updates card says so.
 
 When connected over Bluetooth, the app asks the dongle for its `VERSION` and
