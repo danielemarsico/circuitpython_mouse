@@ -545,7 +545,7 @@ test/
 │       ├── trackpad.spec.js   #  7 tests: draw mode, right click, tap, press/release
 │       ├── jiggle.spec.js     #  8 tests: sliders, localStorage, JIGGLE, canvas, SVG
 │       ├── cipher.spec.js     #  5 tests: encrypt, eye toggle, layout, persistence
-│       ├── voice.spec.js      # 23 tests: text pipeline, WAV, worker requests/errors,
+│       ├── voice.spec.js      # 26 tests: text pipeline, WebM/WAV, worker requests/errors,
 │                              #           auto-type, settings, layouts (fake microphone)
 │       └── updates.spec.js    # 21 tests: app version + banner, VERSION, firmware manifest,
 │                              #           USB updater (changed files only, maintenance, retry)

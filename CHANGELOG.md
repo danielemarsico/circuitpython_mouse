@@ -24,6 +24,7 @@ Format: `[YYYY-MM-DD] - Description`
 - `[2026-10-25]` - Plan/RULEBOOK v1.2: worker changes (CORS, `X-Tembed-Mode: dictation` cleanup) handed off to dudu-worker; separate speech language and host keyboard layout; firmware layout registry with `LAYOUTS` command and generated per-layout charsets
 
 ### Changed
+- `[2026-10-28]` - Voice: the DuDu worker gets the recording as WebM/Opus at 32 kbps (about 10× smaller than WAV) instead of re-encoded 16 kHz WAV; takes under 0.4 s and recorders without Opus still send WAV, and a `415` resends the take as WAV and keeps WAV for the session. `RULEBOOK.md` §5.1 updated; 3 new tests in `voice.spec.js`
 - `[2026-10-27]` - Docs: USB update confirmed on the real dongle (TASKS U4); README and `tools/INSTALL.md` explain the Ubuntu/Lubuntu Chromium snap fix (`snap connect chromium:raw-usb`) for an empty serial port picker
 - `[2026-10-27]` - Service worker (cache `ble-mouse-v9`) revalidates every file with `cache: 'no-cache'`, never caches `version.json` or `firmware/`, and is registered with `updateViaCache: 'none'`
 - `[2026-10-27]` - Docs: README, About and `tools/INSTALL.md` recommend the USB updater (with the Linux `dialout` note); `RULEBOOK.md` 1.5; `TASKS.md` phases U1–U8
