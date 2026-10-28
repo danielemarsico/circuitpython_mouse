@@ -112,8 +112,7 @@ Dictate on the phone and the words are typed on the PC through the dongle.
 - **New "Voice" tab**: a push-to-talk mic button, an editable transcript
   preview, **Type it**, **Enter**, **Clear**, and an *auto-type* toggle.
 - **Speech engine**:
-  - **DuDu worker** (default): records audio, encodes 16 kHz mono WAV in the
-    browser, sends `POST /v1/utterance` in *transcribe mode* (no
+  - **DuDu worker** (default): records audio as WebM/Opus (WAV fallback), sends `POST /v1/utterance` in *transcribe mode* (no
     `X-Tembed-Protocol` header) and gets the full transcript back as `text`.
   - **Browser** (optional fallback): the Web Speech API. No server, live
     interim text, and audio goes to the browser vendor.
@@ -132,8 +131,15 @@ Dictate on the phone and the words are typed on the PC through the dongle.
 
 ### 5.1 Worker contract
 - Follow `../dudu-worker/ASSISTANT_PROTOCOL.md` Part A §2 for the request
-  shape: `Content-Type: audio/wav` with a raw RIFF/WAVE body (16-bit PCM,
-  16 kHz, mono) and `Authorization: Bearer <key>`.
+  shape: a raw audio body and `Authorization: Bearer <key>`. The worker detects
+  the format from the bytes: **WebM-Opus**, **Ogg-Opus** (0.3–60 s) or **WAV**
+  (16-bit PCM, 16 kHz, mono).
+- Send the `MediaRecorder` blob as-is when it is WebM/Ogg (Opus at 32 kbps),
+  with `Content-Type` set to its `mimeType`; a `Content-Type` must match the
+  bytes. Send WAV for takes under 0.4 s and for recorders without Opus
+  (Safari's MP4).
+- **`415` means "send WAV instead"**: resend the take as WAV, then use WAV for
+  the rest of the session.
 - **Never send `X-Tembed-Protocol`.** Without it the worker skips the agent and
   returns the unclipped transcript. With it the reply is an agent answer
   clipped for a 320×170 screen.
@@ -148,7 +154,7 @@ Dictate on the phone and the words are typed on the PC through the dongle.
   `X-Tembed-Device-Id: ble-mouse-web` for the worker's logs.
 - Errors use `{ "error": { "code", "message" } }`. Show `message`. On `429`,
   honour `Retry-After`.
-- Recordings are capped at **60 s** (about 1.9 MB; the worker accepts up to 8 MB).
+- Recordings are capped at **60 s** (about 240 KB as Opus, 1.9 MB as WAV; the worker accepts up to 8 MB).
 
 ### 5.2 Privacy and keys
 - The API key is stored in `localStorage`, the same way as the deriver URL, and

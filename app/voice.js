@@ -8,6 +8,9 @@ const VOICE_DEVICE_ID     = 'ble-mouse-web';
 const VOICE_MAX_SECONDS   = 60;
 const VOICE_HOLD_MS       = 400;    // a press longer than this is hold-to-talk
 const VOICE_TIMEOUT_MS    = 35000;  // worker answers within 30 s (protocol §2)
+const VOICE_OPUS_MIN_SECS = 0.4;    // worker takes Ogg/WebM from 0.3 s; shorter takes go as WAV
+const VOICE_OPUS_BPS      = 32000;  // plenty for Whisper; Chrome's default is ~128 kbps
+const VOICE_OPUS_TYPES    = ['audio/webm;codecs=opus', 'audio/ogg;codecs=opus'];
 const TYPE_LINE_MAX_BYTES = 60;     // device UART buffer is 64 bytes
 
 // Pacing between BLE writes, so the device finishes typing one chunk before
@@ -113,6 +116,26 @@ function typeDictation(text) {
   }));
 }
 
+// --- Upload format: the MediaRecorder's Opus as-is, or WAV ---
+
+// Set to false for the session once the worker answers 415 to Opus.
+let workerTakesOpus = true;
+
+function isOpusBlob(blob) { return /^audio\/(webm|ogg)\b/i.test(blob.type); }
+
+// The worker detects the format from the bytes; 415 means "send WAV instead".
+async function transcribeTake({ blob, seconds }) {
+  if (workerTakesOpus && isOpusBlob(blob) && seconds >= VOICE_OPUS_MIN_SECS) {
+    try {
+      return await transcribeWithWorker(blob);
+    } catch (e) {
+      if (e.status !== 415) throw e;
+      workerTakesOpus = false;
+    }
+  }
+  return transcribeWithWorker(await blobToWav(blob));
+}
+
 // --- WAV encoding (16 kHz mono s16le, as protocol §2 expects) ---
 
 async function blobToWav(blob) {
@@ -174,21 +197,21 @@ function networkError(e) {
 
 // Never sends X-Tembed-Protocol: without it the worker returns the transcript,
 // not an assistant answer clipped for a small screen.
-async function transcribeWithWorker(wav) {
-  const extra = { 'Content-Type': 'audio/wav' };
+async function transcribeWithWorker(audio) {
+  const extra = { 'Content-Type': audio.type || 'audio/wav' };
   if (voiceLang !== 'auto') extra['X-Tembed-Locale'] = voiceLang === 'it' ? 'it-IT' : 'en-US';
   if (voiceCleanup.checked) extra['X-Tembed-Mode'] = 'dictation';
   const abort = new AbortController();
   const timer = setTimeout(() => abort.abort(), VOICE_TIMEOUT_MS);
   let res;
   try {
-    res = await fetch(workerUrl(), { method: 'POST', headers: workerHeaders(extra), body: wav, signal: abort.signal });
+    res = await fetch(workerUrl(), { method: 'POST', headers: workerHeaders(extra), body: audio, signal: abort.signal });
   } catch (e) {
     throw new Error(networkError(e));
   } finally {
     clearTimeout(timer);
   }
-  if (!res.ok) throw new Error(await workerError(res));
+  if (!res.ok) throw Object.assign(new Error(await workerError(res)), { status: res.status });
   const body = await res.json();
   return { text: body.text || '', raw: body.raw || '' };
 }
@@ -328,7 +351,8 @@ async function startWorkerTake() {
     audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true },
   });
   const chunks = [];
-  const mr = new MediaRecorder(stream);
+  const mimeType = VOICE_OPUS_TYPES.find(t => MediaRecorder.isTypeSupported?.(t));
+  const mr = new MediaRecorder(stream, mimeType ? { mimeType, audioBitsPerSecond: VOICE_OPUS_BPS } : {});
   mr.ondataavailable = e => { if (e.data.size) chunks.push(e.data); };
 
   // Level meter and timer
@@ -357,7 +381,7 @@ async function startWorkerTake() {
       await finished;
       stream.getTracks().forEach(t => t.stop());
       meterCtx.close();
-      return new Blob(chunks, { type: mr.mimeType });
+      return { blob: new Blob(chunks, { type: mr.mimeType }), seconds: (Date.now() - started) / 1000 };
     },
   };
 }
@@ -413,7 +437,7 @@ async function stopTake() {
       showTranscript({ text: result.trim(), raw: '' });
     } else {
       setVoiceStatus('transcribing…');
-      showTranscript(await transcribeWithWorker(await blobToWav(result)));
+      showTranscript(await transcribeTake(result));
     }
   } catch (e) {
     setVoiceStatus(e.message, true);
@@ -457,4 +481,4 @@ btnVoiceTest.addEventListener('click', async () => {
 });
 
 // For tests
-Object.assign(window, { normalizeDictation, sanitizeForLayout, chunkForType, buildTypeCommands, encodeWav, voicePacing });
+Object.assign(window, { isOpusBlob, normalizeDictation, sanitizeForLayout, chunkForType, buildTypeCommands, encodeWav, voicePacing });

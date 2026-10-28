@@ -3,7 +3,7 @@ const { test, expect } = require('../fixtures');
 const MOCK_PATH  = require('path').resolve(__dirname, '../mocks/bluetooth-mock.js');
 const WORKER_URL = 'https://dudu.officinegenerative.com/v1/utterance';
 
-// Chromium's fake microphone, so the real MediaRecorder → WAV path runs.
+// Chromium's fake microphone, so the real MediaRecorder → WebM/WAV paths run.
 test.use({
   launchOptions: { args: ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream'] },
   permissions: ['microphone'],
@@ -39,11 +39,11 @@ async function mockWorker(page, { status = 200, body = { protocol: 1, text: 'cia
 }
 
 // Tap to start, wait, tap to stop.
-async function dictate(page) {
+async function dictate(page, ms = 700) {
   await page.click('[data-tab="voice"]');
   await page.click('#btn-mic');
   await page.waitForSelector('#btn-mic.recording');
-  await page.waitForTimeout(700);
+  await page.waitForTimeout(ms);
   await page.click('#btn-mic');
   await page.waitForSelector('#btn-mic:not(.recording):not(.busy)');
 }
@@ -112,7 +112,7 @@ test.describe('Voice tab', () => {
     await expect(page.locator('#btn-voice-type')).toBeEnabled();
   });
 
-  test('dictation posts a WAV in transcribe mode and shows the transcript', async ({ page }) => {
+  test('dictation posts WebM/Opus in transcribe mode and shows the transcript', async ({ page }) => {
     await open(page);
     const requests = await mockWorker(page);
     await page.click('[data-tab="settings"]');
@@ -126,14 +126,49 @@ test.describe('Voice tab', () => {
     expect(requests).toHaveLength(1);
     const { headers, body } = requests[0];
     expect(headers['authorization']).toBe('Bearer secret-key');
-    expect(headers['content-type']).toBe('audio/wav');
+    expect(headers['content-type']).toBe('audio/webm;codecs=opus');
     expect(headers['x-tembed-locale']).toBe('it-IT');
     expect(headers['x-tembed-device-id']).toBe('ble-mouse-web');
     expect(headers['x-tembed-protocol']).toBeUndefined();
     expect(headers['x-tembed-mode']).toBeUndefined();
-    expect(body.subarray(0, 4).toString()).toBe('RIFF');
-    expect(body.readUInt32LE(24)).toBe(16000);
-    expect(body.readUInt16LE(22)).toBe(1);
+    expect(body.subarray(0, 4).toString('hex')).toBe('1a45dfa3');   // EBML magic
+  });
+
+  test('a 415 to WebM resends as WAV, and later takes go straight to WAV', async ({ page }) => {
+    await open(page);
+    const requests = [];
+    await page.route(WORKER_URL, async route => {
+      const req = route.request();
+      requests.push({ type: req.headers()['content-type'], body: req.postDataBuffer() });
+      const wav = req.postDataBuffer().subarray(0, 4).toString() === 'RIFF';
+      await route.fulfill(wav
+        ? { status: 200, contentType: 'application/json', body: JSON.stringify({ protocol: 1, text: 'ciao' }) }
+        : { status: 415, contentType: 'application/json',
+            body: JSON.stringify({ error: { code: 'unsupported_media_type', message: 'WAV only' } }) });
+    });
+    await dictate(page);
+    await expect(page.locator('#voice-text')).toHaveValue('ciao');
+    await dictate(page);
+    expect(requests.map(r => r.type)).toEqual(['audio/webm;codecs=opus', 'audio/wav', 'audio/wav']);
+    const wav = requests[1].body;
+    expect(wav.readUInt32LE(24)).toBe(16000);
+    expect(wav.readUInt16LE(22)).toBe(1);
+  });
+
+  test('a take shorter than the Opus minimum is sent as WAV', async ({ page }) => {
+    await open(page);
+    const requests = await mockWorker(page);
+    await dictate(page, 0);
+    expect(requests).toHaveLength(1);
+    expect(requests[0].headers['content-type']).toBe('audio/wav');
+    expect(requests[0].body.subarray(0, 4).toString()).toBe('RIFF');
+  });
+
+  test('isOpusBlob accepts WebM and Ogg, not MP4 or WAV', async ({ page }) => {
+    await open(page, { connect: false });
+    const out = await page.evaluate(() => ['audio/webm;codecs=opus', 'audio/ogg; codecs=opus', 'audio/mp4', 'audio/wav', '']
+      .map(type => window.isOpusBlob(new Blob([], { type }))));
+    expect(out).toEqual([true, true, false, false, false]);
   });
 
   test('Type it sends the transcript as TYPE commands', async ({ page }) => {
